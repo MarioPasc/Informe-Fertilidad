@@ -807,6 +807,10 @@ dividir_xlsx_en_csv(
 
 ```plaintext
 
+# =======================================
+#       Generación de gráficas 
+#========================================
+
 numericas <- colnames(combinado)[sapply(combinado, is.numeric)]
 categoricas <- colnames(combinado)[!colnames(combinado) %in% numericas]
 
@@ -843,11 +847,17 @@ graficar_barras_categoricas <- function(estadisticas_df, variable) {
 # Aplicar la función a cada variable categórica y almacenar los resultados
 resultados <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(combinado, var))
 
+# Ahora, generamos los gráficos de barras usando los resultados de cada variable categórica
 graficos_barras <- lapply(seq_along(resultados), function(i) {
   graficar_barras_categoricas(resultados[[i]], categoricas[i])
 })
 
+# Actualizamos nuestro dataset para poder operar sobre él a la hora de filtrar (como hacer un back-up)
 datos <- combinado
+
+# =======================================
+# Recodificación de variables categóricas
+#========================================
 
 # Columna DOSIS_1ESTIM, cambiamos CLOMIF y CLOMIFENO por NA_character_
 
@@ -912,6 +922,10 @@ datos <- datos %>%
   mutate(`BLASTUL_1ESTIM` = recode(`BLASTUL_1ESTIM`,
                                    `N0` = "NO"))
 
+# =======================================
+# Generación de gráficas (Post-procesado) 
+#========================================
+
 resultados_2 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(datos, var))
 graficos_barras2 <- lapply(seq_along(resultados_2), function(i) {
   graficar_barras_categoricas(resultados_2[[i]], categoricas[i])
@@ -922,6 +936,10 @@ graficos_barras2 <- lapply(seq_along(resultados_2), function(i) {
 ### Imputación de Datos faltantes (NA)
 
 ```plaintext
+# =======================================
+#     Cálculo de NA por cada variable 
+#========================================
+
 calc_na_val <- function(df) {
   na_val <- sapply(df, function(columna) {
     (sum(is.na(columna)) * 100) / nrow(df)
@@ -931,10 +949,6 @@ calc_na_val <- function(df) {
   na_data <- na_data[na_data$na_count > 0, ]
   return(na_data)
 }
-
-# Actualizamos el dataframe sobre el que trabajamos para mantener en otro
-# los antiguos valores
-combinado <- datos  
 
 plot_na_vals <- function(na_values) {
   # Ahora, usamos 'na_data_filtrada' en ggplot
@@ -948,11 +962,27 @@ plot_na_vals <- function(na_values) {
     ylim(0, 100)
 }
 
+
+# Actualizamos el dataframe sobre el que trabajamos para mantener en otro
+# los antiguos valores
+combinado <- datos  
+
+# Calculamos los valores NA para cada variable
 na_data <- calc_na_val(combinado)
+# Guardamos estos valores en otra variable para luego poder acceder a ellos
 na_data_pre <- na_data
+
+# =======================================
+#     Manipulación de valores NA (I)
+#========================================
 
 # Eliminamos columna con demasiado valores faltantes
 combinado$AMH <- NULL
+
+# =======================================
+#     Exploración de datos numéricos: 
+#    Imputar con la media o la mediana?
+#========================================
 
 # Obtenemos los nombres de las columnas numéricas
 c1 <- colnames(combinado)[sapply(combinado, is.numeric)]
@@ -973,6 +1003,10 @@ for (var in numericas) {
           axis.ticks.x=element_blank())
   graficos_boxplot <- c(graficos_boxplot, p)
 }
+
+# =======================================
+#     Manipulación de valores NA (II)
+#========================================
 
 imputar_valores <- function(df, columna) {
   # Hacemos una función para calcular la moda
@@ -998,9 +1032,11 @@ for (columna in c(numericas, categoricas)) {
   df_imputado <- imputar_valores(df_imputado, columna)  
 }
 
-
+# Guardamos este dataset, ahora con las variables categóricas recodificadas
+# y con los valores faltantes imputados. 
 write.csv(df_imputado, file = "ESTUDIO_Fert_Util.csv", row.names = FALSE)
 
+# Comprobamos que se hayan imputado bien
 na_data_post <- calc_na_val(df_imputado)
 ```
 .
@@ -1008,6 +1044,10 @@ na_data_post <- calc_na_val(df_imputado)
 ### Discusión de los resultados del pre-procesamiento
 
 ```plaintext
+# Básicamente es el código para crear una datatable sobre la que el usuario 
+# pueden realizar una serie de operaciones. 
+# Crédito a GPT por haberme explicado las opciones de personalización, la 
+# documentación del paquete no ayudaba mucho. 
 datatable(
   df_imputado, 
   extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
@@ -1053,35 +1093,47 @@ En esta página se presentan medidas representativas de las columnas de tipo num
 -----------------------------------------------------------------------
 
 ```{r, echo = FALSE, message = FALSE, results = "hide"}
-# Estadística Numérica
-minimos <- sapply(df_imputado[numericas], min)
-q1 <- sapply(df_imputado[numericas], function(x) quantile(x, 0.25))
-medianas <- sapply(df_imputado[numericas], median)
-medias <- sapply(df_imputado[numericas], mean)
-sd <- sapply(df_imputado[numericas], sd)
-q3 <- sapply(df_imputado[numericas], function(x) quantile(x, 0.75))
-maximos <- sapply(df_imputado[numericas], max)
-iqr_values <- q3 - q1
+calcular_estadisticas <- function(df) {
+  # Obtener las columnas numéricas del data frame
+  numericas <- sapply(df, is.numeric)
+  col_numericas <- names(df)[numericas]
+  
+  # Estadística Numérica. El cálculo es bastante directo. 
+  minimos <- sapply(df[col_numericas], min)
+  q1 <- sapply(df[col_numericas], function(x) quantile(x, 0.25))
+  medianas <- sapply(df[col_numericas], median)
+  medias <- sapply(df[col_numericas], mean)
+  sd <- sapply(df[col_numericas], sd)
+  q3 <- sapply(df[col_numericas], function(x) quantile(x, 0.75))
+  maximos <- sapply(df[col_numericas], max)
+  iqr_values <- q3 - q1
+  
+  # Calcular outliers. Asumimos que se consideran outliers a partir de 1.5*IQR
+  outliers_count <- sapply(seq_along(col_numericas), function(i) {
+    lower_bound <- q1[i] - 1.5 * iqr_values[i]
+    upper_bound <- q3[i] + 1.5 * iqr_values[i]
+    sum(df[[col_numericas[i]]] < lower_bound | df[[col_numericas[i]]] > upper_bound)
+  })
+  
+  # Combinar en un data.frame
+  resumen_df <- data.frame(
+    Media = round(medias, 4),
+    Sd = round(sd, 4), 
+    Minimo = minimos,
+    Q1 = q1,
+    Mediana = medianas,
+    Q3 = q3,
+    Maximo = maximos,
+    IQR = iqr_values,
+    Outliers = outliers_count
+  )
+  
+  return(resumen_df)
+}
 
-# Calcular outliers
-outliers_count <- sapply(seq_along(numericas), function(i) {
-  lower_bound <- q1[i] - 1.5 * iqr_values[i]
-  upper_bound <- q3[i] + 1.5 * iqr_values[i]
-  sum(df_imputado[[numericas[i]]] < lower_bound | df_imputado[[numericas[i]]] > upper_bound)
-})
 
-# Combinar en un data.frame
-resumen_df <- data.frame(
-  Media = round(medias, 4),
-  Sd = round(sd, 4), 
-  Minimo = minimos,
-  Q1 = q1,
-  Mediana = medianas,
-  Q3 = q3,
-  Maximo = maximos,
-  IQR = iqr_values,
-  Outliers = outliers_count
-)
+resumen_df <- calcular_estadisticas(df_imputado)
+
 ```
 
 ### Valores de la estadística
@@ -1091,7 +1143,7 @@ datatable(
   resumen_df, 
   extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
   options = list(
-    pageLength = length(medias), 
+    pageLength = 10, 
     scrollX = TRUE, 
     searching = TRUE, 
     ordering = TRUE, 
@@ -1117,12 +1169,17 @@ renderPlotly({
     return(NULL)
   }
   
-  # Generar gráfico
-  p <- plot_ly(data = df_imputado, x = ~eval(as.name(input$varX)), y = ~eval(as.name(input$varY))) %>%
+  # Esto ha sido lo mejor que he podido hacer con plotly. 
+  p <- plot_ly(data = df_imputado,                    # Utiliza el data frame df_imputado como fuente de datos.
+               x = ~eval(as.name(input$varX)),       # Especifica la variable en el eje x, usando el valor de input$varX.
+               y = ~eval(as.name(input$varY))) %>%   # Especifica la variable en el eje y, usando el valor de input$varY.
+    
+    # Agrega puntos al gráfico (scatter plot).
     add_markers() %>%
-    layout(title = paste("Dispersion entre", input$varX, "y", input$varY),
-           xaxis = list(title = input$varX),
-           yaxis = list(title = input$varY))
+    
+    layout(title = paste("Dispersion entre", input$varX, "y", input$varY),  # Título del gráfico, con las variables seleccionadas.
+           xaxis = list(title = input$varX),        # Etiqueta del eje x, con el nombre de la variable seleccionada.
+           yaxis = list(title = input$varY))        # Etiqueta del eje y, con el nombre de la variable seleccionada.
   p
 })
 ```
@@ -1246,8 +1303,88 @@ graficos_barras3[7]
 
 
 
+# Código usado {data-navmenu="Estadística Descriptiva"}
+
+## Columna 1 {data-height=1000, .tabset}
+-----------------------------------------------------------------------
+
+### Estadística Descriptiva Numérica
+```plaintext
+calcular_estadisticas <- function(df) {
+  # Obtener las columnas numéricas del data frame
+  numericas <- sapply(df, is.numeric)
+  col_numericas <- names(df)[numericas]
+  
+  # Estadística Numérica. El cálculo es bastante directo. 
+  minimos <- sapply(df[col_numericas], min)
+  q1 <- sapply(df[col_numericas], function(x) quantile(x, 0.25))
+  medianas <- sapply(df[col_numericas], median)
+  medias <- sapply(df[col_numericas], mean)
+  sd <- sapply(df[col_numericas], sd)
+  q3 <- sapply(df[col_numericas], function(x) quantile(x, 0.75))
+  maximos <- sapply(df[col_numericas], max)
+  iqr_values <- q3 - q1
+  
+  # Calcular outliers. Asumimos que se consideran outliers a partir de 1.5*IQR
+  outliers_count <- sapply(seq_along(col_numericas), function(i) {
+    lower_bound <- q1[i] - 1.5 * iqr_values[i]
+    upper_bound <- q3[i] + 1.5 * iqr_values[i]
+    sum(df[[col_numericas[i]]] < lower_bound | df[[col_numericas[i]]] > upper_bound)
+  })
+  
+  # Combinar en un data.frame
+  resumen_df <- data.frame(
+    Media = round(medias, 4),
+    Sd = round(sd, 4), 
+    Minimo = minimos,
+    Q1 = q1,
+    Mediana = medianas,
+    Q3 = q3,
+    Maximo = maximos,
+    IQR = iqr_values,
+    Outliers = outliers_count
+  )
+  
+  return(resumen_df)
+}
 
 
+resumen_df <- calcular_estadisticas(df_imputado)
+```
+Y por otra parte, el gráfico interactivo:
+```plaintext
+selectInput("varX", "Selecciona la variable para el eje X:", choices = numericas)
+selectInput("varY", "Selecciona la variable para el eje Y:", choices = numericas)
+
+renderPlotly({
+  # Comprueba si las variables han sido seleccionadas
+  if (is.null(input$varX) || is.null(input$varY)) {
+    return(NULL)
+  }
+  
+  # Esto ha sido lo mejor que he podido hacer con plotly. 
+  p <- plot_ly(data = df_imputado,                    # Utiliza el data frame df_imputado como fuente de datos.
+               x = ~eval(as.name(input$varX)),       # Especifica la variable en el eje x, usando el valor de input$varX.
+               y = ~eval(as.name(input$varY))) %>%   # Especifica la variable en el eje y, usando el valor de input$varY.
+    
+    # Agrega puntos al gráfico (scatter plot).
+    add_markers() %>%
+    
+    layout(title = paste("Dispersion entre", input$varX, "y", input$varY),  # Título del gráfico, con las variables seleccionadas.
+           xaxis = list(title = input$varX),        # Etiqueta del eje x, con el nombre de la variable seleccionada.
+           yaxis = list(title = input$varY))        # Etiqueta del eje y, con el nombre de la variable seleccionada.
+  p
+})
+```
+
+### Estadística Descriptiva Categórica
+```plaintext
+resultados_3 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(df_imputado, var))
+graficos_barras3 <- lapply(seq_along(resultados_3), function(i) {
+  graficar_barras_categoricas(resultados_3[[i]], categoricas[i])
+})
+```
+Reutilizamos las funciones de la recodificación de variables categóricas. 
 
 
 
@@ -1467,6 +1604,178 @@ resultados %>%
   # Ordena las filas resultantes del filtro en orden ascendente basándose en la columna 'Valor',
   arrange(Valor)
 ```
+
+
+
+# Dependencia de variables comunes y grupo {data-navmenu="Análisis de Asociación"}
+
+## Columna 1 
+-----------------------------------------------------------------------
+
+### Asociación de las variables comunes con la variable `GRUPO`
+
+Observando la columna adyacente, que muestra los resultados de aplicar los respectivos tests entre cada variable común disponible y la variable `GRUPO`, podemos extraer las siguientes conclusiones:
+
+- **Para el factor femenino (`FACTOR_FEM_1`) y Grupo (`GRUPO`), con p < 0.01 (Fisher test)**: El valor p bajo sugiere una diferencia significativa en relación con el factor femenino entre los diferentes grupos de tratamiento. Los factores femeninos asociados pueden influir de manera notable en el éxito de los tratamientos dentro de los grupos. Clínicamente, esto quiere decir que el factor femenino influye significativamente en la elección del tratamento para la fertilización de la paciente. 
+
+- **Para el factor masculino (`FACTOR_MAS`) y Grupo (`GRUPO`), con p = 0.275 (Fisher test)**: Este valor p, siendo mayor que 0.05, indica que no hay una diferencia estadísticamente significativa en el factor masculino entre los grupos de tratamiento. Esto sugiere que el factor masculino no parece ser un determinante significativo en la diferenciación entre los grupos de tratamiento. 
+
+- **Para la Antral Follicle Count (`AFC`) y Grupo (`GRUPO`), con p = 0.320 (Wilcoxon test)**: Similar al factor masculino, un valor p por encima de 0.05 sugiere que no hay diferencias estadísticamente significativas en la AFC entre los grupos de tratamiento. 
+
+- **Para la Edad (`EDAD`) y Grupo (`GRUPO`), con p = 0.408 (T test)**: Este valor p, también por encima de 0.05, muestra que no hay una diferencia significativa en la edad de los pacientes entre los grupos de tratamiento. Este resultado puede deberse a que la desviación típica de las muestras de edad es baja, ya que todas las mujeres tienen entre 30 y 45 años, por lo que, para pacientes dentro de ese rango, la edad no es factor determinante. 
+
+- **Para el Índice de Masa Corporal (`BMI`) y Grupo (`GRUPO`), con p = 0.754 (Wilcoxon test)**: Al igual que con las otras variables, excepto el factor femenino, un valor p sustancialmente mayor que 0.05 indica que no hay diferencias estadísticamente significativas en el BMI entre los grupos de tratamiento. 
+
+En resumen, de todas las variables comunes analizadas, solo el factor femenino (`FACTOR_FEM_1`) mostró una diferencia estadísticamente significativa entre los grupos de tratamiento, lo cual tendrá implicaciones importantes para la selección y personalización del tratamiento. Las demás variables (factor masculino, AFC, edad y BMI) no mostraron diferencias significativas, indicando que estos factores no influyen en la diferenciación entre los grupos de tratamiento según los datos analizados.
+
+### Resultados numéricos
+
+```{r}
+resultados %>%
+  # Filtra las filas donde las variables X o Y contienen alguna de las variables comunes y la palabra "GRUPO"
+  filter(
+    grepl("EDAD|AFC|FACTOR_MAS|FACTOR_FEM_1|BMI", VariableX) & grepl("GRUPO", VariableY) |
+    grepl("EDAD|AFC|FACTOR_MAS|FACTOR_FEM_1|BMI", VariableY) & grepl("GRUPO", VariableX)
+  ) %>%
+  # Ordena las filas resultantes del filtro en orden ascendente basándose en la columna 'Valor',
+  arrange(Valor)
+
+```
+
+
+# Código usado {data-navmenu="Análisis de Asociación"}
+
+## Columna 1 {.tabset}
+-----------------------------------------------------------------------
+
+### Función general: Cálculo de tests estadísticos.
+
+Debido a que la función es demasiado extensa, recomiendo encarecidamente que se acceda a ella desde el visor de código de github a través de [este enlace](https://github.com/MarioPasc/Mineria-de-Datos-con-R/blob/main/calculaPValor.R). El código también puede encontrarse en [mi repositorio de GitHub](https://github.com/MarioPasc/Mineria-de-Datos-con-R) de la asignatura para este proyecto. 
+
+### Análisis de los resultados brutos - Código.
+
+```plaintext
+
+# =======================================
+#               Mapa de Calor
+# =======================================
+
+ultimo_plot <- ggplot(resultados, aes(x = VariableX, y = VariableY, fill = Valor)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2g", Valor)), size = 3, color = "black", vjust = "inward") +
+  scale_fill_gradient(low = "white", high = "red", limits = c(0, 1), name = "P-valor") +
+  labs(title = "Heatmap de P-valores", x = "Variable X", y = "Variable Y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "cm")) 
+
+ultimo_plot
+
+# =======================================
+# Gráfica de resultados de significancia
+# =======================================
+
+# Preprocesar los datos para agregar una nueva columna que indica la categoría de significancia
+resultados <- resultados %>%
+  mutate(Significancia = case_when(
+    Valor < 0.01 ~ "p < 0.01",
+    Valor < 0.05 ~ "p < 0.05",
+    TRUE ~ "p >= 0.05"
+  ))
+
+# Contar la cantidad de tests por tipo y su categoría de significancia
+df_agregado <- resultados %>%
+  group_by(Test, Significancia) %>%
+  summarise(N = n(), .groups = 'drop')
+
+# Crear la gráfica de barras
+ggplot(df_agregado, aes(fill = Significancia, y = N, x = Test)) +
+  geom_bar(position = "stack", stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Tipo de Test",
+       y = "Cantidad de Muestras",
+       fill = "Categoría de Significancia") +
+  scale_fill_manual(values = c("p < 0.01" = "red", "p < 0.05" = "blue", "p >= 0.05" = "grey"))
+```
+Las únicas funciones a destacar son las de las gráficas. GGPLOT no es sencillo de usar, aunque se parezca mucho a mayplotlib.pyplot (con la que soy mucho más familiar), por ello tengo que reconocer que GPT me ha ayudado mucho en las opciones de configuración de estilo. 
+
+### Respuesta en blastulación - Código.
+```plaintext
+resultados %>%
+  # Filtra las filas donde las variables X o Y contienen la cadena "BLASTUL_1ESTIM" o "BLASTUL_2ESTIM",
+  # Filtra aquellas filas donde las variables X o Y contienen la cadena "GRUPO"
+  filter(
+    grepl("BLASTUL_1ESTIM|BLASTUL_2ESTIM", VariableX) | grepl("BLASTUL_1ESTIM|BLASTUL_2ESTIM", VariableY),
+    grepl("GRUPO", VariableX) | grepl("GRUPO", VariableY)
+  ) %>%
+  # Ordena las filas resultantes del filtro en orden ascendente basándose en la columna 'Valor',
+  arrange(Valor)
+```
+Filtrado usando dyplr. 
+
+### Grupo y Variables comunes - Código
+```plaintext
+resultados %>%
+  # Filtra las filas donde las variables X o Y contienen alguna de las variables comunes y la palabra "GRUPO"
+  filter(
+    grepl("EDAD|AFC|FACTOR_MAS|FACTOR_FEM_1|BMI", VariableX) & grepl("GRUPO", VariableY) |
+    grepl("EDAD|AFC|FACTOR_MAS|FACTOR_FEM_1|BMI", VariableY) & grepl("GRUPO", VariableX)
+  ) %>%
+  # Ordena las filas resultantes del filtro en orden ascendente basándose en la columna 'Valor',
+  arrange(Valor)
+
+```
+Filtrado usando dyplr. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Inferencia Blastulación {data-navmenu="Análisis Multivariante"}
+
+
+## Columna 1
+-----------------------------------------------------------------------
+
+### Objetivo
+
+
+```{r}
+variables_no_significativas <- resultados %>%
+  dplyr::filter((grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX) | 
+                 grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY)) &
+                Valor > 0.05) %>%
+  dplyr::select(VariableX, VariableY, Valor, Test) %>%
+  distinct()
+variables_no_significativas
+
+```
+
+
+
+
+
+
+
+
 
 
 
