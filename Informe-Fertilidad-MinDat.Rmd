@@ -1,0 +1,1479 @@
+---
+title: "Informe Clínica de Fertilidad"
+author: "Mario Pascual González"
+date: "`r Sys.Date()`"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: scroll
+runtime: shiny
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(plotly)
+library(rsconnect)
+library(readxl)
+library(readr)
+library(ggplot2)
+library(shiny)
+library(dplyr)
+library(DT)
+library(tidyverse)
+library(reshape2)
+library(MASS)
+```
+
+
+# Organización de los .xlsx {data-navmenu="Limpieza de datos"}
+
+## Column 1
+-----------------------------------------------------------------------
+### División del fichero original
+
+El fichero `.xlsx` dado para esta práctica POSTsenta dos páginas. Cada una de estas páginas representa un grupo, **Antagonistas** o **Gestágenos**, para cada grupo se tienen una serie de variables comunes, y unos parámetros correspondientes a la **primera estimulación** y la **segunda estimulación**. 
+
+El objetivo entonces de este apartado será manipular este fichero `.xlsx` para convertirlo en diversos ficheros `.csv`, formato con el cual es más fácil trabajar en R. Se ha dividido entonces el fichero original en **6 ficheros**:
+ 
+- Un total de 3 ficheros correspondientes al grupo de **Antagonistas**. Uno para las muestras de las variables de primera estimulación, otro para las de segunda estimulación, y uno para las variables comunes a ambos.   
+
+- Un total de 3 ficheros correspondientes al grupo de **Gestágenos**. Uno para las muestras de las variables de primera estimulación, otro para las de segunda estimulación, y uno para las variables comunes a ambos.   
+
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+dividir_xlsx_en_csv <- function(ruta_xlsx, nombre_csv1, nombre_csv2, nombre_csv3, sheet) {
+  # Leer el archivo .xlsx
+  datos <- read_xlsx(ruta_xlsx, sheet = sheet, skip = 1)
+  
+  # Primer fichero: primeras 6 columnas (A-F)
+  write_csv(datos[, 1:6], nombre_csv1)
+  
+  # Segundo fichero: siguientes 10 columnas (G-P), ajustar según el número de columnas
+  if (ncol(datos) >= 16) {
+    write_csv(datos[, 7:16], nombre_csv2)
+  } else {
+    stop("El archivo no tiene suficientes columnas para el segundo fichero.")
+  }
+  
+  # Tercer fichero: siguientes 10 columnas (Q-Z), ajustar según el número de columnas
+  if (ncol(datos) > 16) {
+    inicio_tercer_fichero <- min(17, ncol(datos))
+    fin_tercer_fichero <- min(26, ncol(datos))
+    write_csv(datos[, inicio_tercer_fichero:fin_tercer_fichero], nombre_csv3)
+  } else {
+    stop("El archivo no tiene suficientes columnas para el tercer fichero.")
+  }
+  
+  return(paste("Archivos generados:", nombre_csv1, nombre_csv2, nombre_csv3))
+}
+
+
+dividir_xlsx_en_csv(
+  "ESTUDIO_Fert_MD.xlsx", 
+  "Antagonistas-datos/Antagonistas-comun.csv",
+  "Antagonistas-datos/Antagonistas-primera-estimulacion.csv",
+  "Antagonistas-datos/Antagonistas-segunda-estimulacion.csv", 
+  1
+)
+dividir_xlsx_en_csv(
+  "ESTUDIO_Fert_MD.xlsx", 
+  "Gestagenos-datos/Gestagenos-comun.csv",
+  "Gestagenos-datos/Gestagenos-primera-estimulacion.csv",
+  "Gestagenos-datos/Gestagenos-segunda-estimulacion.csv",
+  2
+)
+```
+
+
+### Manipulación del nombre de las variables
+
+Este procedimiento nos deja una serie de ficheros `.csv` con nombres de variables que no ayudan a distinguir entre la primera y la segunda estimulación. Es por esto que el siguiente paso será **manipular los nombres de las variables**, los cambios realizados son los siguientes:
+
+- Adición del sufijo **1ESTIM** para las variables de primera estimulación.
+- Adición del sufijo **2ESTIM** para las variables de segunda estimulación.
+- Cambio de los caracteres **"."**, **"-"**, **"/"** a **"_"** para evitar errores de referencia en el código.
+
+
+```{r, echo = FALSE}
+limpiar_nombres <- function(path) {
+  df <- read.csv(path, sep=",")
+  nombres_limpios <- gsub("\\.\\.\\..*", "", names(df))
+  names(df) <- nombres_limpios 
+  return(df)
+}
+
+modificar_nombres <- function(df, n_estim) {
+  names(df) <- paste0(names(df), "_", as.character(n_estim), "ESTIM")
+  nombres_nuevos <- gsub("\\.|-", "_", names(df)) # Reemplaza . o - por _
+  names(df) <- nombres_nuevos
+  return(df)
+}
+
+ANT_comun <- limpiar_nombres(paste("Antagonistas-datos", "Antagonistas-comun.csv", sep="/"))
+names(ANT_comun) <- gsub("\\.|-", "_", names(ANT_comun))
+GES_comun <- limpiar_nombres(paste("Gestagenos-datos", "Gestagenos-comun.csv", sep="/"))
+names(GES_comun) <- gsub("\\.|-", "_", names(GES_comun)) 
+
+
+ANT_primEst <- limpiar_nombres(paste("Antagonistas-datos", "Antagonistas-primera-estimulacion.csv", sep="/"))
+ANT_primEst <- modificar_nombres(ANT_primEst, 1)
+
+ANT_segEst <- limpiar_nombres(paste("Antagonistas-datos", "Antagonistas-segunda-estimulacion.csv", sep="/"))
+ANT_segEst <- modificar_nombres(ANT_segEst, 2)
+
+GES_primEst <- limpiar_nombres(paste("Gestagenos-datos", "Gestagenos-primera-estimulacion.csv", sep="/"))
+GES_primEst <- modificar_nombres(GES_primEst, 1)
+
+GES_segEst <- limpiar_nombres(paste("Gestagenos-datos", "Gestagenos-segunda-estimulacion.csv", sep="/"))
+GES_segEst <- modificar_nombres(GES_segEst, 2)
+
+antagonistas_df <- cbind(ANT_comun, ANT_primEst, ANT_segEst)
+gestagenos_df <- cbind(GES_comun, GES_primEst, GES_segEst)
+
+# Ahora podemos proceder creando la columna grupo
+antagonistas_df$GRUPO <- 'ANTAGONISTAS'
+gestagenos_df$GRUPO <- 'GESTAGENOS'
+
+# Unimos los data.frame en uno único
+combinado <- rbind(antagonistas_df, gestagenos_df)
+```
+
+## Column 2 {data-width=650, .tabset}
+-----------------------------------------------------------------------
+### Antagonistas.csv 
+```{r}
+datatable(antagonistas_df, options = list(pageLength = 10, scrollx = TRUE))
+```
+
+### Gestagenos.csv
+```{r}
+datatable(gestagenos_df, options = list(pageLength = 10, scrollX = TRUE))
+```
+### Combinado.csv
+```{r}
+datatable(combinado, options = list(pageLength = 10, scrollX = TRUE))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Recodificación de Variables Categóricas {data-navmenu="Limpieza de datos"}
+
+## Columna 1
+-----------------------------------------------------------------------
+### Planteamiento del problema
+
+En este apartado se van a tratar las variables categóricas. Un paso muy importante para su tratamiento es la conversión de estas columnas al tipo de factor `factor`, sin embargo, antes de poder realizar este cambio, se deben manipular los valores de estas variables por las siguientes razones:
+
+1. Hay valores que R toma como valores únicos, pero que realmentes son `typos` o errores de escritura que los profesionales de la salud tuvieron a la hora de hacer los datos. Por ejemplo, en `BLASTUL_1ESTIM`, el valor `N0` realmente se refiere a `NO`. 
+
+2. Se han introducido valores de cadena de texto en variables de naturaleza numérica. Este tipo de valores deben ser imputados para no perder la muestra y poder tratar la variable como numérica. Un ejemplo lo tendríamos en la variable `FERTILIZ_1ESTIM`, que muestra valores numéricos excepto una muestra, con un valor anómalo `VITRI`. 
+
+3. Por POSTferencia del personal clínico, se harán algunos cambios en la codificación de determinadas variables. Todos estos cambios serán detallados más adelante. 
+
+### Resumen de la solución
+
+Para resolver los casos (1) y (3) se hará un cambio manual, indicando el anterior valor y el nuevo -esto se realizará con el paquete `dplyr`. Para el caso (2), se hará un cambio manual de los valores anómalos por `NA_character`, de esta forma estos valores se imputarán por medidas de tendencia central o de otra naturaleza numérica a la hora de imputar valores faltantes. 
+
+Se han hecho entonces estos cambios:
+
+**Cambios para DOSIS Primera Estimulación**
+`CLOMIF` = NA_character,
+`CLOMIFENO` = NA_character
+  
+**Cambios para DOSIS Segunda Estimulación**
+`CLOMIF` = NA_character,
+`CLOMIFENO` = NA_character
+
+**Cambios para FETILIZ Primera Estimulación**
+`VITRI` = NA_character
+
+**Cambios para Factor Femenino**
+`Edad` = "BR",
+`EDAD` = "BR",
+`BR` = "BR",
+`BR/EDAD` = "BR",
+`EDAD/BR` = "BR",
+`ADENO` = "ENDO/SI/ADENO",
+`ADENO/ENDO` = "ENDO/SI/ADENO",
+`Endo/ADENO` = "ENDO/SI/ADENO",
+`ENDO` = "ENDO/NO/ADENO",
+`UTERO D` = "ENDO/NO/ADENO"
+
+**Cambios para Factor Masculino**
+`DONANTE` = "NO",
+`No` = "NO",
+`SEVERO` = "SI",                            
+`SI Fragment` = "SI",
+`SI LEVE` = "SI"
+
+**Cambios para Blástula Primera Estimulación**
+`N0` = "NO"
+
+
+## Column 2 {data-width=650, .tabset}
+-----------------------------------------------------------------------
+#### Menú de gráficas generadas
+- **PRE**. Se refiere a las gráficas correspondientes a las distribuciones de las variables categóricas antes de realizar la recodificación. 
+- **POST**. Se refiere a las gráficas correspondientes a las distribuciones de las variables categóricas después de realizar la recodificación. 
+
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+numericas <- colnames(combinado)[sapply(combinado, is.numeric)]
+categoricas <- colnames(combinado)[!colnames(combinado) %in% numericas]
+```
+
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+obtener_estadisticas_categoricas <- function(data, variable) {
+  # Calcular frecuencias
+  frecuencias <- table(data[[variable]])
+  
+  # Calcular porcentajes
+  porcentajes <- prop.table(frecuencias) * 100
+  
+  # Crear un data.frame con los resultados
+  estadisticas_df <- data.frame(
+    Categoria = names(frecuencias),
+    Frecuencia = as.integer(frecuencias),
+    Porcentaje = round(porcentajes, 2)
+  )
+  
+  return(estadisticas_df)
+}
+
+graficar_barras_categoricas <- function(estadisticas_df, variable) {
+  # Generar gráfico de barras usando ggplot2
+  p <- ggplot(estadisticas_df, aes(x = Categoria, y = Frecuencia, fill = Categoria)) +
+    geom_bar(stat = "identity") +
+    theme_minimal() +
+    labs(title = paste("Distribución de la variable", variable),
+         x = variable,
+         y = "Frecuencia") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(p)
+}
+
+# Aplicar la función a cada variable categórica y almacenar los resultados
+resultados <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(combinado, var))
+
+graficos_barras <- lapply(seq_along(resultados), function(i) {
+  graficar_barras_categoricas(resultados[[i]], categoricas[i])
+})
+```
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+datos <- combinado
+
+# Columna DOSIS_1ESTIM, cambiamos CLOMIF y CLOMIFENO por NA_character_
+
+datos <- datos %>%
+  mutate(DOSIS_1ESTIM = as.character(DOSIS_1ESTIM))
+
+datos <- datos %>%
+  mutate(DOSIS_1ESTIM = recode(DOSIS_1ESTIM,
+                                "CLOMIF" = NA_character_,
+                                "CLOMIFENO" = NA_character_))
+
+datos$DOSIS_1ESTIM <- as.numeric(datos$DOSIS_1ESTIM)
+
+# Columna DOSIS_2ESTIM, cambiamos CLOMIF y CLOMIFENO por NA_character_
+
+datos <- datos %>%
+  mutate(DOSIS_2ESTIM = as.character(DOSIS_2ESTIM))
+
+datos <- datos %>%
+  mutate(DOSIS_2ESTIM = recode(DOSIS_2ESTIM,
+                                "CLOMIF" = NA_character_,
+                                "CLOMIFENO" = NA_character_))
+
+datos$DOSIS_2ESTIM <- as.numeric(datos$DOSIS_2ESTIM)
+
+# Columna FERTILIZ_1ESTIM, cambiamos VITRI por NA_character_
+
+datos <- datos %>%
+  mutate(FERTILIZ_1ESTIM = as.character(FERTILIZ_1ESTIM))
+
+datos <- datos %>%
+  mutate(FERTILIZ_1ESTIM = recode(FERTILIZ_1ESTIM,
+                                "VITRI" = NA_character_))
+
+datos$FERTILIZ_1ESTIM <- as.numeric(datos$FERTILIZ_1ESTIM)
+
+# Clínicos
+
+datos <- datos %>%
+  mutate(`FACTOR_FEM_1` = recode(`FACTOR_FEM_1`,
+                                `Edad` = "BR",
+                                `EDAD` = "BR",
+                                `BR` = "BR",
+                                `BR/EDAD` = "BR",
+                                `EDAD/BR` = "BR",
+                                `ADENO` = "ENDO/SI/ADENO",
+                                `ADENO/ENDO` = "ENDO/SI/ADENO",
+                                `Endo/ADENO` = "ENDO/SI/ADENO",
+                                `ENDO` = "ENDO/NO/ADENO",
+                                `UTERO D` = "ENDO/NO/ADENO"))
+
+
+datos <- datos %>%
+  mutate(`FACTOR_MAS` = recode(`FACTOR_MAS`,
+                               `DONANTE` = "NO",
+                               `No` = "NO",
+                               `SEVERO` = "SI",                            
+                               `SI Fragment` = "SI",
+                               `SI LEVE` = "SI"))
+
+datos <- datos %>%
+  mutate(`BLASTUL_1ESTIM` = recode(`BLASTUL_1ESTIM`,
+                                   `N0` = "NO"))
+
+resultados_2 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(datos, var))
+graficos_barras2 <- lapply(seq_along(resultados_2), function(i) {
+  graficar_barras_categoricas(resultados_2[[i]], categoricas[i])
+})
+```
+
+### Factor Masculino - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[1]
+```
+
+### Factor Femenino - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[2]
+```
+
+### Dosis 1ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[3]
+```
+
+### Fertilización 1ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[4]
+```
+
+### Blastulación 1ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[5]
+```
+
+### Feto 1ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[6]
+```
+
+### Dosis 2ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[7]
+```
+
+### Blastulación 2ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[8]
+```
+
+### Feto 2ESTIM - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[9]
+```
+
+### Grupo - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras[10]
+```
+
+### Factor Masculino - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[1]
+```
+
+### Factor Femenino - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[2]
+```
+
+### Blastulación 1ESTIM - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[5]
+```
+
+### Feto 1ESTIM - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[6]
+```
+
+### Blastulación 2ESTIM - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[8]
+```
+
+### Feto 2ESTIM - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[9]
+```
+
+### Grupo - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras2[10]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Imputación de datos faltantes (NA) {data-navmenu="Limpieza de datos"}
+
+## Column 1
+-----------------------------------------------------------------------
+### Planteamiento del problema
+
+Como se pudo observar en el conjunto de datos (objeto `data.frame`) de la sección *"Organización de los .xlsx"*, nuestro dataset contiene una serie de valores faltantes o valores `NA`(*Not Avaiable*). Los conjuntos de datos clínicos tienen una gran cantidad de estos valores, sin embargo, al contener también una cantidad moderada de muestras, estos valores deben imputarse con medidas representativas de la columna para no perder información. Este paso es crucial para poder tener suficientes datos para poder aplicar modelos explicativos, predictivos, o hacer estadística.  
+
+- Para variables categóricas se ha elegido imputar con la moda (sustituir `NA` por el valor con mayor frecuencia de la columna). 
+- Para variables numéricas se ha tomado un acercamiento más cauteloso. Se explorarán los `boxplot` de cada columna, que representan medidas como la dispersión, media, mediana, IRQ o valores atípicos. Con esta información, se decidirá si imputar los valores `NA` con la media o la mediana. 
+- Variables que presenten más de la mitad de datos faltantes se tomarán como no representativas y se eliminará la columna. 
+
+### Resumen de la solución
+
+- Se ha decidido imputar los valores `NA` de variables numéricas con la mediana.
+- Se han imputado los valores `NA` de las variables categóricas con la moda. 
+- Se ha eliminado la columna `AMH` por su alto porcentaje de valores faltantes. 
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+calc_na_val <- function(df) {
+  na_val <- sapply(df, function(columna) {
+    (sum(is.na(columna)) * 100) / nrow(df)
+  })
+  na_data <- data.frame(columna = names(na_val), na_count = na_val)
+  
+  na_data <- na_data[na_data$na_count > 0, ]
+  return(na_data)
+}
+combinado <- datos # Actualizamos el dataframe sobre el que trabajamos 
+
+plot_na_vals <- function(na_values) {
+  # Ahora, usamos 'na_data_filtrada' en ggplot
+  ggplot(na_values, aes(x = columna, y = na_count)) +
+    geom_bar(stat = "identity", fill = "blue") + # Usamos barras azules para mostrar el conteo de NA's
+    theme_minimal() + # Aplicamos un tema minimalista para la gráfica
+    labs(title = "Valores NA por Columna con NA > 0", # Título de la gráfica
+         x = "Columna", # Etiqueta del eje x
+         y = "Número de Valores NA (%)") + # Etiqueta del eje y
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ylim(0, 100)
+}
+
+na_data <- calc_na_val(combinado)
+na_data_pre <- na_data
+```
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+
+combinado$AMH <- NULL
+
+# Obtenemos los nombres de las columnas numéricas
+c1 <- colnames(combinado)[sapply(combinado, is.numeric)]
+# Actualizamos los nombres de las columnas numéricas y que tengan valores faltantes
+numericas <- na_data$columna[na_data$columna %in% c1]
+categoricas <- na_data$columna[!na_data$columna %in% numericas]
+
+
+graficos_boxplot <- c()
+for (var in numericas) {
+  p <- ggplot(combinado, aes(x = factor(0), y = !!sym(var))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", var),
+         x = NULL, y = var) +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+  graficos_boxplot <- c(graficos_boxplot, p)
+}
+
+```
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+imputar_valores <- function(df, columna) {
+  moda <- function(x) {
+    valores_unicos <- unique(x)
+    valores_unicos[which.max(tabulate(match(x, valores_unicos)))]
+  }
+  
+  # Imputar basándose en si la columna es numérica o categórica
+  if (is.numeric(df[[columna]])) {
+    # Usar la mediana para imputar valores faltantes en columnas numéricas
+    df[[columna]][is.na(df[[columna]])] <- median(df[[columna]], na.rm = TRUE)
+  } else {
+    # Usar la moda para imputar valores faltantes en columnas categóricas
+    df[[columna]][is.na(df[[columna]])] <- moda(df[[columna]][!is.na(df[[columna]])])
+  }
+  
+  return(df)
+}
+
+df_imputado <- combinado
+for (columna in c(numericas, categoricas)) {
+  df_imputado <- imputar_valores(df_imputado, columna)  
+}
+
+
+write.csv(df_imputado, file = "ESTUDIO_Fert_Util.csv", row.names = FALSE)
+
+na_data_post <- calc_na_val(df_imputado)
+```
+
+## Columna 2 {data-width=650, .tabset}
+-----------------------------------------------------------------------
+#### Porcentaje de valores `NA` por variable
+- La primera gráfica muestra en un gráfico de barras la cantidad de valores `NA` relativa al total de muestras por cada columna. 
+- La segunda gráfica muestra lo mismo, pero se puede notar que es después del procesamiento, ya que todos los valores `NA` han sido imputados. 
+
+### Distribución de valores NA - PRE
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+plot_na_vals(na_data_pre)
+```
+
+### Distribución de valores NA - POST
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+plot_na_vals(na_data_post)
+```
+
+## Columna 3 {data-width=650, .tabset}
+-----------------------------------------------------------------------
+#### Boxplots de las variables numéricas
+Se muestran los gráficos de caja individuales de cada variable numérica del conjunto de datos. 
+Después de una exhaustiva observación podemos ver que hay variables con un alto grado de dispersión o valores atípicos, es por esto que se ha decidido imputar los valores `NA` de variables numéricas con una medida de tendencia central más estable; la **mediana**. 
+
+
+### Boxplot de Recuento de Folículos Antrales
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("AFC"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "AFC"),
+         x = NULL, y = "AFC") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+```
+
+### Boxplot Dosis (1ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("DOSIS_1ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "DOSIS_1ESTIM"),
+         x = NULL, y = "DOSIS_1ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+```
+
+### Boxplot HMG (1ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("HMG_1ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "HMG_1ESTIM"),
+         x = NULL, y = "HMG_1ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+```
+
+### Boxplot Fertilización (1ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("FERTILIZ_1ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "FERTILIZ_1ESTIM"),
+         x = NULL, y = "FERTILIZ_1ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+```
+
+### Boxplot Número de Blastos de buena Calidad (1ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("BT_AA_1ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "BT_AA_1ESTIM"),
+         x = NULL, y = "BT_AA_1ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+```
+
+### Boxplot CONG (1ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("CONG_1ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "CONG_1ESTIM"),
+         x = NULL, y = "CONG_1ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+```
+
+### Boxplot Dosis (2ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("DOSIS_2ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "DOSIS_2ESTIM"),
+         x = NULL, y = "DOSIS_2ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+```
+
+### Boxplot HMG (2ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("HMG_2ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "HMG_2ESTIM"),
+         x = NULL, y = "HMG_2ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+```
+
+### Boxplot Número de Blastos de buena Calidad (2ESTIM)
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("BT_AA_2ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "BT_AA_2ESTIM"),
+         x = NULL, y = "BT_AA_2ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+```
+
+### Boxplot CONG (2ESTIM)
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+ggplot(combinado, aes(x = factor(0), y = !!sym("CONG_2ESTIM"))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", "CONG_2ESTIM"),
+         x = NULL, y = "CONG_2ESTIM") +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+
+```
+
+
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+# Actualizamos, que siempre viene bien después de haber hecho cambios grandes
+numericas <- colnames(df_imputado)[sapply(df_imputado, is.numeric)]
+categoricas <- colnames(df_imputado)[!colnames(df_imputado) %in% numericas]
+
+# Vamos a convertir las categóricas a factor.
+convertir_a_factores <- function(dataframe, nombres_variables_categoricas) {
+  for (nombre_variable in nombres_variables_categoricas) {
+    dataframe[[nombre_variable]] <- as.factor(dataframe[[nombre_variable]])
+  }
+  return(dataframe)
+}
+
+df_imputado <- convertir_a_factores(df_imputado, categoricas)
+```
+
+
+
+
+
+# Discusión de los resultados del pre-procesamiento {data-navmenu="Limpieza de datos"}
+
+## Column 1
+-----------------------------------------------------------------------
+### Resultados
+Se evidencia en el `data.frame` de la columna adyacente la eliminación de los valores faltantes (`NA`), así como la recodificación de las variables categóricas conforme a las especificaciones de los trabajadores de la clínica de fertilidad, incluyendo la corrección de valores atípicos. 
+
+La imputación de los valores faltantes mediante métodos apropiados ha preservado la representatividad de las muestras que inicialmente presentaban NA, lo cual es de suma importancia para el análisis de la variable de estudio. Esta medida resulta crítica dada la naturaleza limitada de los conjuntos de datos clínicos, donde es fundamental aprovechar todos los datos disponibles para obtener conclusiones realistas y prácticas.
+
+## Columna 2 {data-width=650}
+-----------------------------------------------------------------------
+### Conjunto de datos pre-procesado final
+
+```{r}
+datatable(
+  df_imputado, 
+  extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
+  options = list(
+    pageLength = 50, 
+    scrollX = TRUE, 
+    searching = TRUE, 
+    ordering = TRUE, 
+    paging = TRUE,
+    lengthMenu = list(c(5, 10, 25, 50, -1), c('5 rows', '10 rows', '25 rows', '50 rows', 'Show all')),
+    buttons = c('copy', 'csv', 'excel'),
+    dom = 'Bfrtip'
+  ),
+  class = 'cell-border stripe'
+)
+```
+
+
+
+# Código usado {data-navmenu="Limpieza de datos"}
+
+## Columna 1 {data-height=1000, .tabset}
+-----------------------------------------------------------------------
+
+### Organización de los .xlsx
+
+```plaintext
+dividir_xlsx_en_csv <- function(ruta_xlsx, nombre_csv1, nombre_csv2, nombre_csv3, sheet) {
+  # Leer el archivo .xlsx
+  datos <- read_xlsx(ruta_xlsx, sheet = sheet, skip = 1)
+  
+  # Primer fichero: primeras 6 columnas (A-F)
+  write_csv(datos[, 1:6], nombre_csv1)
+  
+  # Segundo fichero: siguientes 10 columnas (G-P), ajustar según el número de columnas
+  if (ncol(datos) >= 16) {
+    write_csv(datos[, 7:16], nombre_csv2)
+  } else {
+    stop("El archivo no tiene suficientes columnas para el segundo fichero.")
+  }
+  
+  # Tercer fichero: siguientes 10 columnas (Q-Z), ajustar según el número de columnas
+  if (ncol(datos) > 16) {
+    inicio_tercer_fichero <- min(17, ncol(datos))
+    fin_tercer_fichero <- min(26, ncol(datos))
+    write_csv(datos[, inicio_tercer_fichero:fin_tercer_fichero], nombre_csv3)
+  } else {
+    stop("El archivo no tiene suficientes columnas para el tercer fichero.")
+  }
+  
+  return(paste("Archivos generados:", nombre_csv1, nombre_csv2, nombre_csv3))
+}
+
+
+dividir_xlsx_en_csv(
+  "ESTUDIO_Fert_MD.xlsx", 
+  "Antagonistas-datos/Antagonistas-comun.csv",
+  "Antagonistas-datos/Antagonistas-primera-estimulacion.csv",
+  "Antagonistas-datos/Antagonistas-segunda-estimulacion.csv", 
+  1
+)
+dividir_xlsx_en_csv(
+  "ESTUDIO_Fert_MD.xlsx", 
+  "Gestagenos-datos/Gestagenos-comun.csv",
+  "Gestagenos-datos/Gestagenos-primera-estimulacion.csv",
+  "Gestagenos-datos/Gestagenos-segunda-estimulacion.csv",
+  2
+)
+```
+.
+
+
+### Recodificación de variables categóricas
+
+```plaintext
+
+numericas <- colnames(combinado)[sapply(combinado, is.numeric)]
+categoricas <- colnames(combinado)[!colnames(combinado) %in% numericas]
+
+obtener_estadisticas_categoricas <- function(data, variable) {
+  # Calcular frecuencias
+  frecuencias <- table(data[[variable]])
+  
+  # Calcular porcentajes
+  porcentajes <- prop.table(frecuencias) * 100
+  
+  # Crear un data.frame con los resultados
+  estadisticas_df <- data.frame(
+    Categoria = names(frecuencias),
+    Frecuencia = as.integer(frecuencias),
+    Porcentaje = round(porcentajes, 2)
+  )
+  
+  return(estadisticas_df)
+}
+
+graficar_barras_categoricas <- function(estadisticas_df, variable) {
+  # Generar gráfico de barras usando ggplot2
+  p <- ggplot(estadisticas_df, aes(x = Categoria, y = Frecuencia, fill = Categoria)) +
+    geom_bar(stat = "identity") +
+    theme_minimal() +
+    labs(title = paste("Distribución de la variable", variable),
+         x = variable,
+         y = "Frecuencia") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(p)
+}
+
+# Aplicar la función a cada variable categórica y almacenar los resultados
+resultados <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(combinado, var))
+
+graficos_barras <- lapply(seq_along(resultados), function(i) {
+  graficar_barras_categoricas(resultados[[i]], categoricas[i])
+})
+
+datos <- combinado
+
+# Columna DOSIS_1ESTIM, cambiamos CLOMIF y CLOMIFENO por NA_character_
+
+datos <- datos %>%
+  mutate(DOSIS_1ESTIM = as.character(DOSIS_1ESTIM))
+
+datos <- datos %>%
+  mutate(DOSIS_1ESTIM = recode(DOSIS_1ESTIM,
+                                "CLOMIF" = NA_character_,
+                                "CLOMIFENO" = NA_character_))
+
+datos$DOSIS_1ESTIM <- as.numeric(datos$DOSIS_1ESTIM)
+
+# Columna DOSIS_2ESTIM, cambiamos CLOMIF y CLOMIFENO por NA_character_
+
+datos <- datos %>%
+  mutate(DOSIS_2ESTIM = as.character(DOSIS_2ESTIM))
+
+datos <- datos %>%
+  mutate(DOSIS_2ESTIM = recode(DOSIS_2ESTIM,
+                                "CLOMIF" = NA_character_,
+                                "CLOMIFENO" = NA_character_))
+
+datos$DOSIS_2ESTIM <- as.numeric(datos$DOSIS_2ESTIM)
+
+# Columna FERTILIZ_1ESTIM, cambiamos VITRI por NA_character_
+
+datos <- datos %>%
+  mutate(FERTILIZ_1ESTIM = as.character(FERTILIZ_1ESTIM))
+
+datos <- datos %>%
+  mutate(FERTILIZ_1ESTIM = recode(FERTILIZ_1ESTIM,
+                                "VITRI" = NA_character_))
+
+datos$FERTILIZ_1ESTIM <- as.numeric(datos$FERTILIZ_1ESTIM)
+
+# Clínicos
+
+datos <- datos %>%
+  mutate(`FACTOR_FEM_1` = recode(`FACTOR_FEM_1`,
+                                `Edad` = "BR",
+                                `EDAD` = "BR",
+                                `BR` = "BR",
+                                `BR/EDAD` = "BR",
+                                `EDAD/BR` = "BR",
+                                `ADENO` = "ENDO/SI/ADENO",
+                                `ADENO/ENDO` = "ENDO/SI/ADENO",
+                                `Endo/ADENO` = "ENDO/SI/ADENO",
+                                `ENDO` = "ENDO/NO/ADENO",
+                                `UTERO D` = "ENDO/NO/ADENO"))
+
+
+datos <- datos %>%
+  mutate(`FACTOR_MAS` = recode(`FACTOR_MAS`,
+                               `DONANTE` = "NO",
+                               `No` = "NO",
+                               `SEVERO` = "SI",                            
+                               `SI Fragment` = "SI",
+                               `SI LEVE` = "SI"))
+
+datos <- datos %>%
+  mutate(`BLASTUL_1ESTIM` = recode(`BLASTUL_1ESTIM`,
+                                   `N0` = "NO"))
+
+resultados_2 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(datos, var))
+graficos_barras2 <- lapply(seq_along(resultados_2), function(i) {
+  graficar_barras_categoricas(resultados_2[[i]], categoricas[i])
+})
+```
+.
+
+### Imputación de Datos faltantes (NA)
+
+```plaintext
+calc_na_val <- function(df) {
+  na_val <- sapply(df, function(columna) {
+    (sum(is.na(columna)) * 100) / nrow(df)
+  })
+  na_data <- data.frame(columna = names(na_val), na_count = na_val)
+  
+  na_data <- na_data[na_data$na_count > 0, ]
+  return(na_data)
+}
+
+# Actualizamos el dataframe sobre el que trabajamos para mantener en otro
+# los antiguos valores
+combinado <- datos  
+
+plot_na_vals <- function(na_values) {
+  # Ahora, usamos 'na_data_filtrada' en ggplot
+  ggplot(na_values, aes(x = columna, y = na_count)) +
+    geom_bar(stat = "identity", fill = "blue") + # Usamos barras azules para mostrar el conteo de NA's
+    theme_minimal() + # Aplicamos un tema minimalista para la gráfica
+    labs(title = "Valores NA por Columna con NA > 0", # Título de la gráfica
+         x = "Columna", # Etiqueta del eje x
+         y = "Número de Valores NA (%)") + # Etiqueta del eje y
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ylim(0, 100)
+}
+
+na_data <- calc_na_val(combinado)
+na_data_pre <- na_data
+
+# Eliminamos columna con demasiado valores faltantes
+combinado$AMH <- NULL
+
+# Obtenemos los nombres de las columnas numéricas
+c1 <- colnames(combinado)[sapply(combinado, is.numeric)]
+# Actualizamos los nombres de las columnas numéricas y que tengan valores faltantes
+numericas <- na_data$columna[na_data$columna %in% c1]
+categoricas <- na_data$columna[!na_data$columna %in% numericas]
+
+
+graficos_boxplot <- c()
+for (var in numericas) {
+  p <- ggplot(combinado, aes(x = factor(0), y = !!sym(var))) + 
+    geom_boxplot() +
+    labs(title = paste("Boxplot de", var),
+         x = NULL, y = var) +
+    theme_minimal() +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
+  graficos_boxplot <- c(graficos_boxplot, p)
+}
+
+imputar_valores <- function(df, columna) {
+  # Hacemos una función para calcular la moda
+  moda <- function(x) {
+    valores_unicos <- unique(x)
+    valores_unicos[which.max(tabulate(match(x, valores_unicos)))]
+  }
+  
+  # Imputar basándose en si la columna es numérica o categórica
+  if (is.numeric(df[[columna]])) {
+    # Usar la mediana para imputar valores faltantes en columnas numéricas
+    df[[columna]][is.na(df[[columna]])] <- median(df[[columna]], na.rm = TRUE)
+  } else {
+    # Usar la moda para imputar valores faltantes en columnas categóricas
+    df[[columna]][is.na(df[[columna]])] <- moda(df[[columna]][!is.na(df[[columna]])])
+  }
+  
+  return(df)
+}
+
+df_imputado <- combinado
+for (columna in c(numericas, categoricas)) {
+  df_imputado <- imputar_valores(df_imputado, columna)  
+}
+
+
+write.csv(df_imputado, file = "ESTUDIO_Fert_Util.csv", row.names = FALSE)
+
+na_data_post <- calc_na_val(df_imputado)
+```
+.
+
+### Discusión de los resultados del pre-procesamiento
+
+```plaintext
+datatable(
+  df_imputado, 
+  extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
+  options = list(
+    pageLength = 50, 
+    scrollX = TRUE, 
+    searching = TRUE, 
+    ordering = TRUE, 
+    paging = TRUE,
+    lengthMenu = list(c(5, 10, 25, 50, -1), c('5 rows', '10 rows', '25 rows', '50 rows', 'Show all')),
+    buttons = c('copy', 'csv', 'excel'),
+    dom = 'Bfrtip'
+  ),
+  class = 'cell-border stripe'
+)
+```
+.
+
+
+
+# Numérica {data-navmenu="Estadística Descriptiva"}
+
+## Columna 1 {data-width=650}
+-----------------------------------------------------------------------
+### Estadística Univariante Numérica
+
+En esta página se presentan medidas representativas de las columnas de tipo numérico del dataset clínico. La estadística univariante numérica es una herramienta fundamental para explorar y comprender la estructura de los datos, permitiéndonos identificar patrones significativos como la tendencia central, la dispersión, la simetría y la forma de la distribución. Esto nos ayuda a tomar decisiones fundamentadas en base a la información obtenida.
+
+### Descripción de las medidas del estudio
+
+| Medida          | Significado                                                                                                         |
+|-----------------|---------------------------------------------------------------------------------------------------------------------|
+| Media           | La media aritmética es el promedio de un conjunto de números, obtenido sumando todos los valores y dividiendo entre el número total de valores. Representa el valor típico o central del conjunto de datos. Si la distribución de datos es simétrica, la media coincide con la mediana. Sin embargo, puede verse afectada por valores atípicos.    |
+| Mediana         | La mediana es el valor que se encuentra en el centro de un conjunto de datos ordenados de menor a mayor. Si el número de datos es impar, la mediana es el valor central; si es par, es el promedio de los dos valores centrales. La mediana es una medida robusta de la centralidad, ya que no se ve influenciada por valores extremos.   |
+| Q1              | El primer cuartil (Q1) es el valor que deja a un cuarto de los datos por debajo y tres cuartos por encima cuando los datos están ordenados de menor a mayor. También se conoce como el percentil 25. Indica el valor por debajo del cual se encuentra el 25% de los datos.     |
+| Q3              | El tercer cuartil (Q3) es el valor que deja a tres cuartos de los datos por debajo y un cuarto por encima cuando los datos están ordenados de menor a mayor. También se conoce como el percentil 75. Indica el valor por debajo del cual se encuentra el 75% de los datos.   |
+| IQR             | El rango intercuartil (IQR) es la diferencia entre el tercer cuartil (Q3) y el primer cuartil (Q1). Representa la dispersión de los datos en torno a la mediana. Cuanto mayor sea el IQR, mayor será la dispersión de los datos. Es una medida robusta de la dispersión, ya que no se ve afectada por valores extremos.  |
+| Desviación típica | La desviación típica es una medida de dispersión que indica cuánto varían los valores de un conjunto de datos con respecto a la media. Es la raíz cuadrada de la varianza. Una desviación típica alta indica que los valores están muy dispersos alrededor de la media, mientras que una desviación típica baja indica que los valores están más cerca de la media.    |
+
+
+
+## Columna 2 {data-width=650, .tabset}
+-----------------------------------------------------------------------
+
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+# Estadística Numérica
+minimos <- sapply(df_imputado[numericas], min)
+q1 <- sapply(df_imputado[numericas], function(x) quantile(x, 0.25))
+medianas <- sapply(df_imputado[numericas], median)
+medias <- sapply(df_imputado[numericas], mean)
+sd <- sapply(df_imputado[numericas], sd)
+q3 <- sapply(df_imputado[numericas], function(x) quantile(x, 0.75))
+maximos <- sapply(df_imputado[numericas], max)
+iqr_values <- q3 - q1
+
+# Calcular outliers
+outliers_count <- sapply(seq_along(numericas), function(i) {
+  lower_bound <- q1[i] - 1.5 * iqr_values[i]
+  upper_bound <- q3[i] + 1.5 * iqr_values[i]
+  sum(df_imputado[[numericas[i]]] < lower_bound | df_imputado[[numericas[i]]] > upper_bound)
+})
+
+# Combinar en un data.frame
+resumen_df <- data.frame(
+  Media = round(medias, 4),
+  Sd = round(sd, 4), 
+  Minimo = minimos,
+  Q1 = q1,
+  Mediana = medianas,
+  Q3 = q3,
+  Maximo = maximos,
+  IQR = iqr_values,
+  Outliers = outliers_count
+)
+```
+
+### Valores de la estadística
+
+```{r}
+datatable(
+  resumen_df, 
+  extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
+  options = list(
+    pageLength = length(medias), 
+    scrollX = TRUE, 
+    searching = TRUE, 
+    ordering = TRUE, 
+    paging = TRUE,
+    lengthMenu = list(c(5, 10, 25, 50, -1), c('5 rows', '10 rows', '25 rows', '50 rows', 'Show all')),
+    buttons = c('copy', 'csv', 'excel'),
+    dom = 'Bfrtip'
+  ),
+  class = 'cell-border stripe'
+)
+
+```
+
+### Gráficos de Dispersión 
+
+```{r}
+selectInput("varX", "Selecciona la variable para el eje X:", choices = numericas)
+selectInput("varY", "Selecciona la variable para el eje Y:", choices = numericas)
+
+renderPlotly({
+  # Comprueba si las variables han sido seleccionadas
+  if (is.null(input$varX) || is.null(input$varY)) {
+    return(NULL)
+  }
+  
+  # Generar gráfico
+  p <- plot_ly(data = df_imputado, x = ~eval(as.name(input$varX)), y = ~eval(as.name(input$varY))) %>%
+    add_markers() %>%
+    layout(title = paste("Dispersion entre", input$varX, "y", input$varY),
+           xaxis = list(title = input$varX),
+           yaxis = list(title = input$varY))
+  p
+})
+```
+
+
+
+
+## Columna 3 {.tabset}
+-----------------------------------------------------------------------
+### Interpretación (I)
+
+1. **AFC (Antral Follicle Count)**: La distribución de los recuentos de folículos antrales muestra una dispersión moderada alrededor de la mediana, sin embargo, se debe recalcar la presencia de algunos valores atípicos que podrían requerir una mayor investigación sobre cómo se han tomado esos datos.
+
+2. **DOSIS_1ESTIM (Dosis de la primera estimulación)**: La dosis de la primera estimulación tiende a ser alta, con la mayoría de los valores concentrados alrededor del tercer cuartil, sin la presencia de valores atípicos.
+
+3. **HMG_1ESTIM (Hormona Gonadotropina Menopáusica)**: La distribución de la hormona gonadotropina muestra una dispersión moderada alrededor de la mediana, con algunos valores atípicos que podrían influir en el análisis.
+
+4. **FERTILIZ_1ESTIM (Fertilización en la primera estimulación)**: La tasa de fertilización en la primera estimulación muestra una dispersión moderada alrededor de la mediana, con la presencia de algunos valores atípicos.
+
+5. **BT_AA_1ESTIM (Biopsia Testicular Asistida)**: La frecuencia de la biopsia testicular asistida en la primera estimulación es relativamente baja, con algunos valores atípicos que podrían indicar situaciones excepcionales que no son representativas del procedimiento normal. La mediana está cerca de la media, pero la desviación típica es relativamente alta en comparación con la media, lo que sugiere una distribución sesgada hacia valores más altos.
+
+### Interpretación (II)
+
+6. **CONG_1ESTIM (Congelación en la primera estimulación)**: La frecuencia de la congelación en la primera estimulación muestra una dispersión moderada alrededor de la mediana, sin la presencia de valores atípicos.
+
+7. **DOSIS_2ESTIM (Dosis de la segunda estimulación)**: Al igual que en la primera estimulación, la dosis de la segunda estimulación tiende a ser alta, con la mayoría de los valores concentrados alrededor del tercer cuartil, y sin valores atípicos.
+
+8. **HMG_2ESTIM (Hormona Gonadotropina Menopáusica en la segunda estimulación)**: La distribución de la hormona gonadotropina en la segunda estimulación muestra una dispersión moderada alrededor de la mediana, con algunos valores atípicos.
+
+9. **BT_AA_2ESTIM (Biopsia Testicular Asistida en la segunda estimulación)**: La frecuencia de la biopsia testicular asistida en la segunda estimulación es similar a la primera, con la presencia de algunos valores atípicos.
+
+10. **CONG_2ESTIM (Congelación en la segunda estimulación)**: La frecuencia de la congelación en la segunda estimulación muestra una dispersión moderada alrededor de la mediana, con algunos valores atípicos.
+
+### Interpretación (III)
+
+11. **EDAD (Edad)**: La mediana (38) está cerca de la media (37.7215), lo que sugiere una distribución relativamente simétrica de las edades en la muestra.
+
+12. **BMI (Índice de Masa Corporal)**: El rango intercuartil (IQR) es de 2.5, lo que sugiere una dispersión moderada de los índices de masa corporal alrededor de la mediana.
+
+13. **DIAS_1ESTIM (Duración de la primera estimulación)**: La duración media de la primera estimulación es de aproximadamente 8.8 días, con un rango intercuartil (IQR) de 2 días.
+
+14. **Nº_OVO_1ESTIM (Número de óvulos en la primera estimulación)**: El rango intercuartil (IQR) es de 3.5, lo que indica una variabilidad moderada en el número de óvulos recolectados en la primera estimulación.
+
+15. **DIAS_2ESTIM (Duración de la segunda estimulación)**: La duración media de la segunda estimulación es de aproximadamente 10.7 días, con un rango intercuartil (IQR) de 3.5 días.
+
+16. **MII_1ESTIM (Maduración en Metafase II en la primera estimulación)**: La mediana (4) está cerca de la media (4.2405), lo que sugiere una distribución relativamente simétrica de los datos sobre la maduración en metafase II.
+
+17. **MII_2ESTIM (Maduración en Metafase II en la segunda estimulación)**: La mediana (4) está cerca de la media (4.3038), lo que sugiere una distribución relativamente simétrica de los datos sobre la maduración en metafase II en la segunda estimulación.
+
+
+
+
+
+
+
+# Categórica {data-navmenu="Estadística Descriptiva"}
+
+## Columna 1 
+-----------------------------------------------------------------------
+
+### Estadística Univariante Categórica
+
+El foco se esta apartado se centrará en el análisis de variables cualitativas o categóricas. Se comprenderá la frecuencia y distribución de las distintas categorías dentro de una variable, así como para identificar patrones y relaciones entre ellas. Al utilizar técnicas como tablas de frecuencia, gráficos de barras y medidas de centralidad como la moda, la estadística univariante categórica nos proporciona una visión detallada de la composición y estructura de los datos categóricos, lo que nos permite extraer conclusiones significativas y tomar decisiones informadas en diversos campos de estudio y aplicación.
+
+### Observaciones
+
+1. **FACTOR_MAS (Factor Masculino)**. Se puede observar que existe una mayor cantidad de muestras (>60%) con el valor `NO` para esta variable.
+2. **FACTOR_FEM_1 (Factor Femenino)**. Debido a la recodificación de las variables categóricas, muchas de las muestras fueron refactorizadas al valor `BR`, haciendo que esta sea la clase con una mayor frecuencia relativa (>50%). 
+3. **BLASTUL_1ESTIM (Blastulación Primera Estimulación)**. La mayoría de muestras contienen el valor `SI` (>50%). 
+4. **FET_1ESTIM (Feto en Primera Estimulación)**. Aunque la mayoría de pacientes consiguieron desarrollar una blástula, en primera estimulación, más del 50% no consiguieron desarrollar un feto. 
+5. **BLASTUL_2ESTIM (Blastulación Segunda Estimulación)**. La mayoría de muestras contienen el valor `SI` (>50%).
+6. **FET_2ESTIM (Feto en Segunda Estmulación)**. Un alto porcentaje de pacientes no desarrollaron feto en segunda estimulación ($\approx 45\%$). 
+
+Además, es importante observar la variable `GRUPO`, la cual exhibe un desbalance evidente entre la cantidad de muestras del grupo `ANTAGONISTAS` ($\approx 60\%$), frente a la disminuída cantidad del grupo `GESTAGENOS`. Esto se debe tener en cuenta a la hora de realizar modelos predictivos sobre los datos. 
+
+
+## Columna 2 {.tabset}
+----------------------------------------------------------------------
+
+```{r}
+resultados_3 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(df_imputado, var))
+graficos_barras3 <- lapply(seq_along(resultados_3), function(i) {
+  graficar_barras_categoricas(resultados_3[[i]], categoricas[i])
+})
+```
+
+### Factor Masculino 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[1]
+```
+
+### Factor Femenino 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[2]
+```
+
+### Blastulación 1ESTIM 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[3]
+```
+
+### Feto 1ESTIM 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[4]
+```
+
+### Blastulación 2ESTIM 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[5]
+```
+
+### Feto 2ESTIM 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[6]
+```
+
+### Grupo 
+```{r, echo = FALSE, message = FALSE, results = "hide"}
+graficos_barras3[7]
+```
+
+
+
+
+
+
+
+
+
+# Pruebas o Tests Bivariantes: Función Genérica {data-navmenu="Análisis de Asociación"}
+
+
+## Columna 1 {data-width=830, .tabset}
+----------------------------------------------------------------------
+
+### Planteamiento de la función. 
+
+Se busca poder automatizar el proceso de aplicar tests estadísticos a pares de variables del conjunto de datos. No existe un test estadístico que pueda ser aplicado a cualquier par de variables sin tener en cuenta su naturaleza, sino que, basándonos en características de la variable, se debe decidir si usar un test u otro. 
+
+El primer objetivo de la función es entonces que, dado un conjunto de datos y dos columnas de ese conjunto: 
+1. Se determine **el tipo de test que debe ser aplicado**
+2. Se calcule el **p-valor** del test indicado en (1). 
+
+El segundo objetivo de la función sería realizar el proceso redactado en el primer objetivo para todos los pares de variables de un conjunto de datos de entrada. Los resultados se devolverían en un objeto `data.frame` en el que se indicaría el par de variables, el tipo de test aplicado, y el `p-valor` calculado. 
+
+### Arbol de decisión para los tests 
+
+Con el fin de seleccionar el test estadístico más apropiado según las características de un par de variables, se han establecido criterios de decisión. Estos criterios se representan en un pseudocódigo que ilustra los pasos necesarios para determinar qué test utilizar en función de si las variables son categóricas o numéricas, y si cumplen con ciertas condiciones, como la normalidad de la distribución de los datos. Este enfoque garantiza una selección adecuada y fundamentada del test estadístico en el análisis de los datos.
+
+```plaintext
+Función SeleccionarTest(variable1, variable2):
+    Si variable1 es categórica y variable2 es categórica:
+        Si alguna instancia en la tabla de contingencia es menor que 5:
+            Retornar "Fisher", Fisher$p-valor
+        Else:
+            Retornar "Chi-cuadrado", Chi-cuadrado$p-valor
+    
+    Si variable1 es categórica y variable2 es numérica:
+        Si hay dos categorías:
+            Si la distribución (numérica) es normal:
+                Retornar "T-test", T-test$p-valor
+            Else:
+                Retornar "Wilcox test", Wilcox test$p-valor
+        Else:  # Más de dos categorías
+            Si la distribución (numérica) es normal:
+                Retornar "Análisis de la varianza", Análisis de la varianza$p-valor
+            Else:
+                Retornar "Kruskal test", Kruskal test$p-valor
+    
+    Si variable1 es numérica y variable2 es numérica:
+        Si la distribución de ambas variables es normal:
+            Retornar "Correlación de Pearson", "Correlación de Pearson$p-valor
+        Else:
+            Retornar "Correlación de Spearman", Correlación de Spearman$p-valor
+```
+
+### Función programada
+
+El fichero `.R` que se ha programado con esta función se puede encontrar en [mi repositorio de GitHub](https://github.com/MarioPasc/Mineria-de-Datos-con-R) asociado a los apuntes de la asignatura. 
+
+Se ha intentado añadir la cantidad máxima de comentarios útiles en el código para facilitar la comprensión de este. Adicionalmente, se ha intentado hacer uso de las funciones `built-in` de R antes que bucles `for` para optimizar lo máximo posible el rendimiento de algunas tareas triviales dentro de la función (como encontrar las variables categóricas del conjunto de datos). 
+
+El fichero se ha llamado [`calculaPValor.R`](https://github.com/MarioPasc/Mineria-de-Datos-con-R/blob/main/calculaPValor.R) y se puede usar dentro de una celda de R Markdown descargando el archivo, posicionándolo dentro del directorio de trabajo y haciendo uso de `source(./calculaPValor.R)`. 
+
+## Columna 2 
+----------------------------------------------------------------------
+
+| Test                        | Hipótesis Nula                               | Función en R       |
+|-----------------------------|-----------------------------------------------|--------------------|
+| Chi cuadrado                | No hay relación entre las variables categóricas. | `chisq.test`      |
+| Fisher                      | No hay diferencia significativa entre las varianzas de dos muestras. | `fisher.test` |
+| T-test                      | La media de dos poblaciones es igual.        | `t.test`          |
+| Wilcox test                 | No hay diferencia entre dos muestras relacionadas. | `wilcox.test` |
+| Varianza                    | Las varianzas de varias poblaciones son iguales. | `var.test`       |
+| Kruskal test                | Las medianas de varias poblaciones son iguales. | `kruskal.test`   |
+| Correlación de Pearson      | No hay correlación lineal entre dos variables. | `cor.test`       |
+| Correlación de Spearman     | No hay correlación monótona entre dos variables. | `cor.test`      |
+| Sapphire test               | No hay diferencia entre una distribución normal y la variable. | `sapphire.test` |
+
+
+
+
+# Análisis de los resultados brutos {data-navmenu="Análisis de Asociación"}
+
+## Columna 1 
+----------------------------------------------------------------------
+
+### Interpretación de los resultados brutos
+
+El gráfico del apartado `Tests por tipo y significancia` presenta una comparación visual de la frecuencia de los distintos tipos de test estadísticos utilizados y sus niveles de significancia. Se observa que el test de Spearman es el más utilizado, seguido del de Fisher y el test de Wilcoxon, mientras que el test AOV y el T test  se emplean con menos frecuencia.
+
+En términos de significancia, una porción considerable de los tests de Spearman muestra p-valores inferiores a 0.01, lo cual indica una alta significancia estadística. Además, este test también tiene una notable cantidad de resultados con p-valores entre 0.01 y 0.05, denotado por el color azul.
+
+El test de Fisher también revela una cantidad significativa de resultados con p-valores menores a 0.05, con una presencia más notoria de resultados altamente significativos (p < 0.01), es importante ver que la cantidad relativa de resultados altamente significativos con respecto a tests de Fisher totales es alta. Esto significa que la mayoría de pares de variables que han "pasado" (p<0.05) el test de Fisher lo han hecho con un p menor que 0.01. 
+```{r, warning= FALSE, echo = FALSE, message = FALSE, results = "hide"}
+source("./calculaPValor.R")
+
+resultados <- aplicaCalculaPValorATodosLosPares(df_imputado)
+```
+
+```{r}
+p_less_than_005 <- sum(resultados$Valor < 0.05) / nrow(resultados) * 100
+
+p_less_than_001_given_005 <- sum(resultados$Valor < 0.01 & resultados$Valor < 0.05) / sum(resultados$Valor < 0.05) * 100
+
+print(paste("Porcentaje de tests con un valor p<0.05: ", round(p_less_than_005, 3), "%", sep = ""))
+print(paste("Porcentaje de tests con un valor p<0.01 (sobre el porcentaje de tests con p<0.05): ", round(p_less_than_001_given_005, 3), "%", sep = ""))
+```
+
+
+
+
+## Columna 2 {.tabset} 
+----------------------------------------------------------------------
+### Resultados (Dataframe)
+
+```{r}
+datatable(
+  resultados, 
+  extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
+  options = list(
+    pageLength = 10, 
+    scrollX = TRUE, 
+    searching = TRUE, 
+    ordering = TRUE, 
+    paging = TRUE,
+    lengthMenu = list(c(5, 10, 25, 50, -1), c('5 rows', '10 rows', '25 rows', '50 rows', 'Show all')),
+    buttons = c('copy', 'csv', 'excel'),
+    dom = 'Bfrtip'
+  ),
+  class = 'cell-border stripe'
+)
+```
+
+
+### Resultados (Mapa de calor)
+
+```{r, fig.width=15, fig.height=10}
+ultimo_plot <- ggplot(resultados, aes(x = VariableX, y = VariableY, fill = Valor)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2g", Valor)), size = 3, color = "black", vjust = "inward") +
+  scale_fill_gradient(low = "white", high = "red", limits = c(0, 1), name = "P-valor") +
+  labs(title = "Heatmap de P-valores", x = "Variable X", y = "Variable Y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "cm")) 
+
+ultimo_plot
+```
+
+### Tests por tipo y significancia  
+
+```{r, fig.width=12, fig.height=8}
+# Preprocesar los datos para agregar una nueva columna que indica la categoría de significancia
+resultados <- resultados %>%
+  mutate(Significancia = case_when(
+    Valor < 0.01 ~ "p < 0.01",
+    Valor < 0.05 ~ "p < 0.05",
+    TRUE ~ "p >= 0.05"
+  ))
+
+# Contar la cantidad de tests por tipo y su categoría de significancia
+df_agregado <- resultados %>%
+  group_by(Test, Significancia) %>%
+  summarise(N = n(), .groups = 'drop')
+
+# Crear la gráfica de barras
+ggplot(df_agregado, aes(fill = Significancia, y = N, x = Test)) +
+  geom_bar(position = "stack", stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Tipo de Test",
+       y = "Cantidad de Muestras",
+       fill = "Categoría de Significancia") +
+  scale_fill_manual(values = c("p < 0.01" = "red", "p < 0.05" = "blue", "p >= 0.05" = "grey"))
+
+```
+
+
+
+# Respuesta en Blastulación  {data-navmenu="Análisis de Asociación"}
+
+## Columna 1
+----------------------------------------------------------------------
+
+### Tratamiento en primera estimulación
+
+Un valor p de 0.7873 es mucho mayor que el umbral común de 0.05, lo que significa que no podemos rechazar la hipótesis nula. Basándonos en los datos proporcionados y el resultado del test de Fisher, no hay evidencia suficiente para afirmar que exista una asociación entre el tipo de tratamiento (GRUPO) y el éxito de la blastulación en la primera estimulación (BLASTUL_1ESTIM).
+
+Este resultado sugiere que la eficacia del tratamiento en términos de resultados de blastulación de primera estimulación es comparable entre los diferentes grupos de tratamiento en la primera estimulación. 
+
+### Tratamiento en segunda estimulación
+
+Al obtener un valor p menor a 0.01, estamos rechazando la hipótesis nula con un nivel de confianza del 99%. Esto significa que los datos proporcionan evidencia suficiente para afirmar que existe una asociación significativa entre el grupo de tratamiento y los resultados de blastulación en la segunda estimulación. La probabilidad de que esta fuerte asociación sea debido al azar es menor al 1%
+
+Clínicamente, esto podría indicar que el éxito de la blastulación (es decir, el desarrollo exitoso de embriones a la etapa de blastocisto) varía significativamente entre los grupos de tratamiento (antagonistas y gestágenos). Un grupo puede recibir un medicamento o tratamiento A y el otro un tratamiento B, y la tasa de éxito en la llegada a la etapa de blastocisto podría ser significativamente mayor en uno de estos grupos.
+
+### Conclusión
+
+- **Para la Blastulación de Primera Estimulación (`BLASTUL_1ESTIM`) y Grupo (`GRUPO`), con p = 0.7873**: El valor p alto sugiere que no hay suficiente evidencia para afirmar que existen diferencias significativas en las tasas de éxito de blastulación entre los diferentes grupos de tratamiento durante la primera estimulación. Por lo tanto, se puede concluir que el grupo de tratamiento no influye significativamente en la probabilidad de alcanzar la blastulación en la primera estimulación.
+
+- **Para la Blastulación de Segunda Estimulación (`BLASTUL_2ESTIM`) y Grupo (`GRUPO`), con p < 0.01**: Un valor p significativamente bajo indica que hay una diferencia estadística significativa en las tasas de éxito de blastulación entre los diferentes grupos de tratamiento en la segunda estimulación. Esto significa que, dependiendo del grupo de tratamiento al que pertenezca un individuo, las probabilidades de alcanzar una blastulación exitosa en la segunda estimulación pueden variar.
+
+Desde una perspectiva clínica, estos resultados pueden ser utilizados para informar decisiones relacionadas con la selección del tratamiento, ajustes en las estrategias de estimulación, y proporcionar a los pacientes información sobre lo que pueden esperar de su tratamiento, especialmente en rondas subsecuentes de estimulación. 
+
+## Columna 2 {data-width=300}
+----------------------------------------------------------------------
+
+### Resultados numéricos
+
+```{r}
+resultados %>%
+  # Filtra las filas donde las variables X o Y contienen la cadena "BLASTUL_1ESTIM" o "BLASTUL_2ESTIM",
+  # Filtra aquellas filas donde las variables X o Y contienen la cadena "GRUPO"
+  filter(
+    grepl("BLASTUL_1ESTIM|BLASTUL_2ESTIM", VariableX) | grepl("BLASTUL_1ESTIM|BLASTUL_2ESTIM", VariableY),
+    grepl("GRUPO", VariableX) | grepl("GRUPO", VariableY)
+  ) %>%
+  # Ordena las filas resultantes del filtro en orden ascendente basándose en la columna 'Valor',
+  arrange(Valor)
+```
+
+
+
+
+
+
+
+
+
+

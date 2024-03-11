@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1159038/ba9c8d08ad674a21a1fb58335bb0f4b0
+bundleId: https://api.rpubs.com/api/v1/document/1159038/ba9c8d08ad674a21a1fb58335bb0f4b0
+url: http://rpubs.com/mariopascuma/1159038
+version: 1
