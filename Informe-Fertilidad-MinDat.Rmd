@@ -1757,18 +1757,52 @@ Filtrado usando dyplr.
 
 ### Objetivo
 
+Se pretende construir un modelo explicativo basado en la regresión logística con el objetivo de encontrar las variables comunes a los pacientes que expliquen mejor el evento "BLASTUL_1ESTIM" y "BLASTUL_2ESTIM" por separado. Con este fin, se va a proceder de la siguiente manera:
+
+1. Se filtrarán los resultados del análisis de asociación bruto para seleccionar las variables no específicas a ninguna estimulación que tengan un p-valor menor que 0.05 como resultado en los tests estadísticos realizados en conjunto con las variables `BLASTUL_1ESTIM` o `BLASTUL_2ESTIM`. 
+2. Partiendo de esta base
+
 
 ```{r}
-variables_no_significativas <- resultados %>%
+variables_significativas <- resultados %>%
+  # Primero filtramos para que solo incluya las variables de interés cuando se relacionan con la blastulación
+  dplyr::filter(((VariableX %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
+                  (grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY))) |
+                 (VariableY %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
+                  (grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX)))) &
+                Valor < 0.05) %>%
+  dplyr::select(VariableX, VariableY, Valor, Test) %>%
+  dplyr::arrange(VariableY) %>%
+  # Eliminamos filas duplicadas
+  distinct()
+
+variables_significativas <- resultados %>%
   dplyr::filter((grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX) | 
                  grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY)) &
-                Valor > 0.05) %>%
+                Valor < 0.05) %>%
   dplyr::select(VariableX, VariableY, Valor, Test) %>%
-  distinct()
-variables_no_significativas
+  dplyr::arrange(VariableY) %>%
+  distinct() # Elimina filas duplicadas
+
+variables_significativas
+
 
 ```
 
+```{r}
+modelo_inicial <- glm(BLASTUL_1ESTIM ~ EDAD + AFC,
+                      family = binomial(link = "logit"), data = df_imputado)
+
+summary(modelo_inicial)
+```
+```{r}
+# Aplicar selección stepwise para simplificar el modelo
+modelo_stepwise <- step(modelo_inicial, direction = "both")
+
+# Ver los resultados del modelo después de la selección stepwise
+summary(modelo_stepwise)
+
+```
 
 
 
