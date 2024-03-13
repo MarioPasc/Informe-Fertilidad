@@ -27,6 +27,53 @@ library(MASS)
 ```
 
 
+# Introducción 
+
+## Column 1 {data-width=75%}
+-----------------------------------------------------------------------
+
+**Abstract**
+
+En el panorama actual de la salud reproductiva, las clínicas de fertilidad desempeñan un papel fundamental al ofrecer esperanza y soluciones avanzadas a individuos y parejas que enfrentan desafíos en su camino hacia la paternidad. Estas clínicas no solo son pilares de innovación tecnológica y médica en el tratamiento de la infertilidad, sino también centros de apoyo compasivo y orientación para aquellos en busca de concebir. La implementación de tratamientos **especializados, económicos y accesibles**, como los antagonistas de la GnRH y los gestágenos, refleja el compromiso de estas instituciones con la adaptación a las necesidades y circunstancias únicas de cada paciente, lo que subraya su importancia intrínseca en la mejora de la salud reproductiva y en el fortalecimiento de las familias.
+
+**Contexto de desarrollo del Estudio**
+
+Los antagonistas de la GnRH y los gestágenos son tratamientos de fertilidad que actúan sobre el sistema endocrino para optimizar la estimulación ovárica: los antagonistas de la GnRH inhiben de manera directa la secreción de gonadotropinas para prevenir la ovulación prematura, mientras que los gestágenos, al ser parte de los protocolos de progestina, pueden modificar el entorno hormonal favoreciendo un desarrollo folicular adecuado sin la supresión abrupta de la LH. La diferencia entre estos grupos radica principalmente en sus mecanismos de acción y efectos sobre el ciclo menstrual, lo que puede conducir a variaciones en la efectividad, la experiencia del paciente y los costos asociados. 
+
+Este estudio se centra en evaluar y comparar la eficacia de dos tratamientos de fertilidad: los basados en **antagonistas de la GnRH (ANTAGONISTAS)** y los que utilizan **gestágenos (GESTAGENOS)**, con el fin de entender mejor cómo estos tratamientos influyen en los resultados de las estimulaciones ováricas. A través del análisis de variables comunes registradas en dos rondas de estimulación por paciente y su correlación con los eventos de blastulación, se pretende identificar los factores explicativos clave para el éxito del tratamiento. Al abordar específicamente la dinámica de la blastulación —la formación de una blástula que es un indicador crítico del éxito reproductivo—, el estudio aspira a desentrañar las complejidades subyacentes que distinguen la efectividad entre los dos grupos de tratamiento.
+
+**Consecuencias del Estudio**
+
+Desde una perspectiva económica, entender las diferencias en la efectividad entre los tratamientos con antagonistas de la GnRH y gestágenos puede facilitar una asignación más eficiente de recursos y reducir la carga financiera para las clínicas y las familias. En términos de salud mental, clarificar el impacto de estos tratamientos tiene el potencial de aliviar significativamente la tensión emocional que experimentan las parejas durante los procesos de fertilidad, ofreciendo esperanza y dirección más claras. Para las clínicas, la capacidad para ajustar y personalizar los tratamientos basados en evidencia robusta no solo mejora las tasas de éxito sino que también refuerza su reputación como líderes en cuidado reproductivo. Finalmente, este estudio contribuye a forjar un futuro más brillante para aquellos en la búsqueda de la paternidad, enfatizando el papel crítico de la investigación cuidadosa y la medicina basada en evidencia en la mejora continua de los tratamientos de fertilidad.
+
+## Column 2 {data-width=23%}
+-----------------------------------------------------------------------
+
+
+```{r, echo=FALSE}
+
+shiny::HTML('
+            <p align="center">
+  <strong>Perfil del estudiante</strong>
+</p>
+')
+
+shiny::HTML('
+<div style="text-align: center;">
+    <img src="foto.jpg" alt="Texto alternativo" width="200"/>
+</div>
+')
+```
+
+Mario Pascual González es estudiante de Ingeniería de la Salud con mención en Bioinformática en la Universidad de Málaga. 
+
+Ha participado en diversos proyectos enfocados en la Visión por Computador y el Machine Learning, tanto como parte de su plan de estudios como en iniciativas independientes. ([LinkedIn](https://www.linkedin.com/in/mario-pascual-gonzalez/)).
+
+Sus principales áreas de interés incluyen el aprendizaje profundo, la aplicación de la visión por computador en el ámbito biomédico, la representación del conocimiento y razonamiento, sistemas cognitivos y el procesamiento del lenguaje natural.
+
+
+
+
 # Organización de los .xlsx {data-navmenu="Limpieza de datos"}
 
 ## Column 1
@@ -764,7 +811,10 @@ datatable(
 
 ### Organización de los .xlsx
 
-```plaintext
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#     Tratamiento de ficheros xlsx 
+#========================================
 dividir_xlsx_en_csv <- function(ruta_xlsx, nombre_csv1, nombre_csv2, nombre_csv3, sheet) {
   # Leer el archivo .xlsx
   datos <- read_xlsx(ruta_xlsx, sheet = sheet, skip = 1)
@@ -791,7 +841,9 @@ dividir_xlsx_en_csv <- function(ruta_xlsx, nombre_csv1, nombre_csv2, nombre_csv3
   return(paste("Archivos generados:", nombre_csv1, nombre_csv2, nombre_csv3))
 }
 
-
+# =======================================
+#        Aplicando la conversión 
+#========================================
 dividir_xlsx_en_csv(
   "ESTUDIO_Fert_MD.xlsx", 
   "Antagonistas-datos/Antagonistas-comun.csv",
@@ -812,14 +864,18 @@ dividir_xlsx_en_csv(
 
 ### Recodificación de variables categóricas
 
-```plaintext
+```{r echo=TRUE, eval = FALSE}
 
 # =======================================
-#       Generación de gráficas 
+#     Obtención de columnas num/cat 
 #========================================
 
 numericas <- colnames(combinado)[sapply(combinado, is.numeric)]
 categoricas <- colnames(combinado)[!colnames(combinado) %in% numericas]
+
+# =======================================
+# Obtención de estadísticas: Categóricas 
+#========================================
 
 obtener_estadisticas_categoricas <- function(data, variable) {
   # Calcular frecuencias
@@ -838,6 +894,10 @@ obtener_estadisticas_categoricas <- function(data, variable) {
   return(estadisticas_df)
 }
 
+# =======================================
+#       Generación de gráficas 
+#========================================
+
 graficar_barras_categoricas <- function(estadisticas_df, variable) {
   # Generar gráfico de barras usando ggplot2
   p <- ggplot(estadisticas_df, aes(x = Categoria, y = Frecuencia, fill = Categoria)) +
@@ -850,6 +910,10 @@ graficar_barras_categoricas <- function(estadisticas_df, variable) {
   
   return(p)
 }
+
+# =======================================
+#          Obtención de Datos 
+#========================================
 
 # Aplicar la función a cada variable categórica y almacenar los resultados
 resultados <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(combinado, var))
@@ -910,12 +974,17 @@ datos <- datos %>%
                                 `BR` = "BR",
                                 `BR/EDAD` = "BR",
                                 `EDAD/BR` = "BR",
-                                `ADENO` = "ENDO/SI/ADENO",
-                                `ADENO/ENDO` = "ENDO/SI/ADENO",
-                                `Endo/ADENO` = "ENDO/SI/ADENO",
-                                `ENDO` = "ENDO/NO/ADENO",
-                                `UTERO D` = "ENDO/NO/ADENO"))
-
+                                `ADENO` = "ENDO",
+                                `ADENO/ENDO` = "ENDO",
+                                `Endo/ADENO` = "ENDO",
+                                `ENDO` = "ENDO",
+                                `UTERO D` = "ENDO",
+                                `FALLO IAC` = "ENDO",
+                                `FI` = "ENDO",
+                                `GENETICO` = "ENDO",
+                                `HIDROSALP` = "ENDO",
+                                `NO` = "ENDO",
+                                `AR` = "ENDO"))
 
 datos <- datos %>%
   mutate(`FACTOR_MAS` = recode(`FACTOR_MAS`,
@@ -942,7 +1011,7 @@ graficos_barras2 <- lapply(seq_along(resultados_2), function(i) {
 
 ### Imputación de Datos faltantes (NA)
 
-```plaintext
+```{r echo=TRUE, eval = FALSE}
 # =======================================
 #     Cálculo de NA por cada variable 
 #========================================
@@ -957,6 +1026,10 @@ calc_na_val <- function(df) {
   return(na_data)
 }
 
+# =======================================
+#      Gráficas % de NA / Columna 
+#========================================
+
 plot_na_vals <- function(na_values) {
   # Ahora, usamos 'na_data_filtrada' en ggplot
   ggplot(na_values, aes(x = columna, y = na_count)) +
@@ -969,6 +1042,10 @@ plot_na_vals <- function(na_values) {
     ylim(0, 100)
 }
 
+
+# =======================================
+#           Obtención de Datos
+#========================================
 
 # Actualizamos el dataframe sobre el que trabajamos para mantener en otro
 # los antiguos valores
@@ -1034,6 +1111,10 @@ imputar_valores <- function(df, columna) {
   return(df)
 }
 
+# =======================================
+#           Obtención de Datos
+#========================================
+
 df_imputado <- combinado
 for (columna in c(numericas, categoricas)) {
   df_imputado <- imputar_valores(df_imputado, columna)  
@@ -1050,7 +1131,7 @@ na_data_post <- calc_na_val(df_imputado)
 
 ### Discusión de los resultados del pre-procesamiento
 
-```plaintext
+```{r echo=TRUE, eval = FALSE}
 # Básicamente es el código para crear una datatable sobre la que el usuario 
 # pueden realizar una serie de operaciones. 
 # Crédito a GPT por haberme explicado las opciones de personalización, la 
@@ -1316,7 +1397,11 @@ graficos_barras3[7]
 -----------------------------------------------------------------------
 
 ### Estadística Descriptiva Numérica
-```plaintext
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#   Cálculo de Estadísticas: Numéricas
+# =======================================
+
 calcular_estadisticas <- function(df) {
   # Obtener las columnas numéricas del data frame
   numericas <- sapply(df, is.numeric)
@@ -1359,7 +1444,11 @@ calcular_estadisticas <- function(df) {
 resumen_df <- calcular_estadisticas(df_imputado)
 ```
 Y por otra parte, el gráfico interactivo:
-```plaintext
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#   Gráfico Interactivo Shiny y Plotly
+# =======================================
+
 selectInput("varX", "Selecciona la variable para el eje X:", choices = numericas)
 selectInput("varY", "Selecciona la variable para el eje Y:", choices = numericas)
 
@@ -1385,7 +1474,7 @@ renderPlotly({
 ```
 
 ### Estadística Descriptiva Categórica
-```plaintext
+```{r echo=TRUE, eval = FALSE}
 resultados_3 <- lapply(categoricas, function(var) obtener_estadisticas_categoricas(df_imputado, var))
 graficos_barras3 <- lapply(seq_along(resultados_3), function(i) {
   graficar_barras_categoricas(resultados_3[[i]], categoricas[i])
@@ -1412,7 +1501,7 @@ El primer objetivo de la función es entonces que, dado un conjunto de datos y d
 
 El segundo objetivo de la función sería realizar el proceso redactado en el primer objetivo para todos los pares de variables de un conjunto de datos de entrada. Los resultados se devolverían en un objeto `data.frame` en el que se indicaría el par de variables, el tipo de test aplicado, y el `p-valor` calculado. 
 
-### Arbol de decisión para los tests 
+### Pseudocódigo decisión test estadístico
 
 Con el fin de seleccionar el test estadístico más apropiado según las características de un par de variables, se han establecido criterios de decisión. Estos criterios se representan en un pseudocódigo que ilustra los pasos necesarios para determinar qué test utilizar en función de si las variables son categóricas o numéricas, y si cumplen con ciertas condiciones, como la normalidad de la distribución de los datos. Este enfoque garantiza una selección adecuada y fundamentada del test estadístico en el análisis de los datos.
 
@@ -1661,7 +1750,7 @@ Debido a que la función es demasiado extensa, recomiendo encarecidamente que se
 
 ### Análisis de los resultados brutos - Código.
 
-```plaintext
+```{r echo=TRUE, eval = FALSE}
 
 # =======================================
 #               Mapa de Calor
@@ -1699,7 +1788,7 @@ df_agregado <- resultados %>%
   group_by(Test, Significancia) %>%
   summarise(N = n(), .groups = 'drop')
 
-# Crear la gráfica de barras
+# Crear la gráfica de barras (Costó lo suyo)
 ggplot(df_agregado, aes(fill = Significancia, y = N, x = Test)) +
   geom_bar(position = "stack", stat = "identity") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -1708,10 +1797,14 @@ ggplot(df_agregado, aes(fill = Significancia, y = N, x = Test)) +
        fill = "Categoría de Significancia") +
   scale_fill_manual(values = c("p < 0.01" = "red", "p < 0.05" = "blue", "p >= 0.05" = "grey"))
 ```
-Las únicas funciones a destacar son las de las gráficas. GGPLOT no es sencillo de usar, aunque se parezca mucho a mayplotlib.pyplot (con la que soy mucho más familiar), por ello tengo que reconocer que GPT me ha ayudado mucho en las opciones de configuración de estilo. 
+Las únicas funciones a destacar son las de las gráficas. GGPLOT no es sencillo de usar, aunque se parezca mucho a mayplotlib.pyplot (con la que soy mucho más familiar). 
 
 ### Respuesta en blastulación - Código.
-```plaintext
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#             Filtrado DPLYR
+# =======================================
+
 resultados %>%
   # Filtra las filas donde las variables X o Y contienen la cadena "BLASTUL_1ESTIM" o "BLASTUL_2ESTIM",
   # Filtra aquellas filas donde las variables X o Y contienen la cadena "GRUPO"
@@ -1725,7 +1818,11 @@ resultados %>%
 Filtrado usando dyplr. 
 
 ### Grupo y Variables comunes - Código
-```plaintext
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#             Filtrado DPLYR
+# =======================================
+
 resultados %>%
   # Filtra las filas donde las variables X o Y contienen alguna de las variables comunes y la palabra "GRUPO"
   filter(
@@ -1762,7 +1859,7 @@ Filtrado usando dyplr.
 ## Columna 1 {.tabset}
 -----------------------------------------------------------------------
 
-### Objetivo
+### Objetivo General
 
 Se pretende construir un modelo explicativo basado en la regresión logística con el objetivo de encontrar las variables comunes a los pacientes que expliquen mejor el evento `BLASTUL_1ESTIM` y `BLASTUL_2ESTIM` por separado. Con este fin, se va a proceder de la siguiente manera:
 
@@ -1776,8 +1873,66 @@ Como se puede observar en la tabla superior, las variables que guardan una signi
 
 ### Modelo Explicativo - Blastulación 1ESTIM
 
-Se intentará explicar el evento de la primera blastulación con las variables comunes a los pacientes. Por ello, de todas las variables con un p-valor compartido con  `BLASTUL_1ESTIM` menor que 0.05, solo nos quedaremos con: `EDAD`, `AFC` y `FACTOR_FEM_1`. 
+**Objetivo Específico**
 
+
+Se pretende explicar el evento de la primera blastulación con las variables comunes a los pacientes. Por ello, de todas las variables con un p-valor compartido con  `BLASTUL_1ESTIM` menor que 0.05, solo nos quedaremos con: `EDAD`, `AFC` y `FACTOR_FEM_1`. 
+
+
+**Modelo - Interpretación**
+
+
+En la columna central, en la pestaña "Modelo BLASTUL Primera Estimulación" se pueden encontrar los resultados de ajustar este modelo. Como se puede observar, en este modelo con todas las variables, la única que parece indicar tener una asociación con la blastulación en primera estimulación es `FACTOR_FEM_1ENDO`. La estimación de 1.6402 unidades indica que la presencia de este factor femenino, *endometriosis*, está asociada con la probabilidad positiva de que se produzca la blastulación. 
+
+
+Adicionalmente, la varianza de los residuos del ajuste con las variables es 90.065, valor menor que la varianza con ninguna, `Null deviance`, que tiene un valor de 102.723. Esto es un indicador de que el modelo explica mejor el evento de blastulación con las variables añadidas. 
+
+
+**Modelo - Ajuste**
+
+Para explorar la posbilidad de que el modelo pueda explicar mejor la blastulación en ausencia de alguna de las variables se va a proceder aplicando un algoritmo "stepwise" hacia atrás ("backwards"). Se ha decidido aplicarlo hacia atrás ya que hemos probado que el modelo explica mejor el suceso cuando todas las variables están presentes, así que será más sabio partir de esta base e ir eliminando variables del modelo para comprobar si se influye una mejora en este.
+
+
+Comparando los valores de la columna central y la de la derecha de la UI, el algoritmo stepwise converge a un modelo más simple, el cual consigue explicar el evento de blastulación con el uso de las variables `EDAD` y `FACTOR_FEM_1ENDO`, prescindiendo de la variable `AFC`. Adicionalmente, la significancia estadística de la variable `FACTOR_FEM_1ENDO` parece ser mayor, ya que el p-valor asociado a esta ha disminuído ligeramente a 0.0305, además, el incremento en el coeficiente estimado para esta variable subraya una asociación positiva más fuerte con el éxito de la blastulación
+
+
+**Conclusión**
+
+
+El modelo refinado mediante el algoritmo "stepwise" hacia atrás ofrece una visión concentrada sobre los predictores clave de la blastulación, destacando la importancia de la edad y factores femeninos específicos, como se ejemplifica en `FACTOR_FEM_1ENDO`. Este enfoque debe complementarse con una evaluación continua y un análisis detallado de todas las variables disponibles para asegurar una comprensión integral de los determinantes de la blastulación.
+
+
+### Modelo Explicativo - Blastulación 2ESTIM
+
+**Objetivo Específico**
+
+
+Se pretende explicar el evento de la segunda blastulación con las variables comunes a los pacientes y las variables de primera estimulación. 
+
+
+**Modelo - Interpretación**
+
+Debido a que la única variable común o de primera estimulación que guarda una significacia estadística con `BLASTUL_2ESTIM` es `GRUPO`, el modelo solo puede construirse con esta variable. Aunque se procederá con este acercamiento para comprobar si existe alguna posibilidad de que el modelo converja en una solución. 
+
+Observando los valores de la columna central, en concreto del apartado "Modelo BLASTUL Segunda Estimulación", podemos observar que la estimación es de 18.0906, siendo un coeficiente muy grande, pero dado el enorme error estándar (1496.3959), la interpretación se vuelve poco clara. Este coeficiente sugeriría que, en comparación con el grupo de referencia, la pertenencia al grupo tratado con gestágenos está asociada con un aumento en el log-odds de la blastulación en la segunda estimulación. Sin embargo, la interpretación directa de este coeficiente es imposible debido al p valor de 0.9904. Este p-valor extremadamente alto indica que no hay evidencia estadística para afirmar que la variable GRUPOGESTAGENOS tiene un efecto significativo sobre la probabilidad de blastulación en la segunda estimulación. La significancia estadística de esta variable es prácticamente nula en este modelo. 
+
+
+**Modelo - Ajuste**
+
+
+Para explorar la posibilidad de encontrar una solución, se va a probar a partir del modelo con la variable `GRUPO` y aplicar un algoritmo stepwise hacia adelante ("forward"). Esto se hará ya que existe una posibilidad de que el modelo explicativo converja en una solución al añadir más variables, aunque estas aumenten la complejidad e interpretabilidad de este. 
+
+
+Sin embargo, si observamos los valores de salida del algoritmo en la columna de la derecha de la UI en el apartado "Ajuste Modelo Blastulación Segunda Estimulación", se puede concluir que el algoritmo no ha conseguido encontrar un mejor modelo que el propuesto en el anterior apartado, aunque este no sea válido. 
+
+
+**Conclusión**
+
+
+El modelo sugiere que no hay evidencia suficiente para afirmar que el grupo tratado con gestágenos tiene un impacto significativo en la probabilidad de blastulación en la segunda estimulación. El enorme error estándar asociado con el coeficiente de `GRUPOGESTAGENOS` indica una gran incertidumbre en la estimación de este efecto, lo que podría ser resultado de la variabilidad en los datos, un tamaño de muestra pequeño para este grupo específico, o la presencia de valores atípicos.
+
+
+Es importante considerar estos resultados en el contexto de la investigación general sobre la fertilidad y los tratamientos de estimulación ovárica. La ausencia de significancia estadística para `GRUPOGESTAGENOS` no necesariamente indica que no haya diferencias clínicas relevantes entre los grupos, sino que el modelo actual y los datos disponibles no proporcionan evidencia estadística de tal efecto. 
 
 
 ## Columna 2 {.tabset}
@@ -1786,18 +1941,6 @@ Se intentará explicar el evento de la primera blastulación con las variables c
 ### Variables que guardan un p<0.05 con Blastulación 
 
 ```{r}
-#variables_significativas <- resultados %>%
-  # Primero filtramos para que solo incluya las variables de interés cuando se relacionan con la blastulación
-#  dplyr::filter(((VariableX %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI", "GRUPO") & 
-#                  (grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY))) |
-#                 (VariableY %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
-#                  (grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX)))) &
-#                Valor < 0.05) %>%
-#  dplyr::select(VariableX, VariableY, Valor, Test) %>%
-#  dplyr::arrange(VariableY) %>%
-  # Eliminamos filas duplicadas
-#
-
 variables_significativas <- resultados %>%
   dplyr::filter((grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX) | 
                  grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY)) &
@@ -1824,48 +1967,179 @@ datatable(
 
 ```
 
-### Modelos
+### Modelo BLASTUL Primera Estimulación
+
 ```{r}
-lr <- glm(BLASTUL_1ESTIM ~ EDAD + AFC + FACTOR_FEM_1,
+lr <- glm((BLASTUL_1ESTIM=="SI")*1.0 ~ EDAD + AFC + FACTOR_FEM_1,
                       family = binomial(link = "logit"), data = df_imputado)
 tidy_model <- broom::tidy(lr)
 datatable(
   tidy_model %>%
   mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
   options = list(
-    pageLength = 10
-  ),
+    pageLength = 10,
+    buttons = 'copy'
+    ),
   class = 'cell-border stripe'
 )
 ```
-```{r, eval=TRUE}
-# Aplicar selección stepwise para simplificar el modelo
-stepAIC(lr, directorion = "both")
 
+### Modelo BLASTUL Segunda Estimulación
 
+```{r}
+lr2 <- glm((BLASTUL_2ESTIM=="SI")*1.0 ~  GRUPO,
+                      family = binomial(link = "logit"), data = df_imputado)
+tidy_model2 <- broom::tidy(lr2)
+datatable(
+  tidy_model2 %>%
+  mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
+  options = list(
+    pageLength = 10,
+    buttons = 'copy'
+    ),
+  class = 'cell-border stripe'
+)
+```
+
+## Columna 3 {.tabset}
+-----------------------------------------------------------------------
+
+### Ajuste Modelo Blastulación Primera Estimulación
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Aplicar stepAIC para seleccionar modelo con dirección hacia atrás
+modelo_seleccionado <- stepAIC(lr, direction = "backward")
+
+# Utilizar broom para estructurar los resultados del modelo final
+modelo_tidy <- tidy(modelo_seleccionado)
+```
+
+```{r}
+# Presentar la tabla de coeficientes del modelo seleccionado
+tidy_model_step <- broom::tidy(modelo_seleccionado)
+datatable(
+  tidy_model_step %>%
+  mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
+  options = list(
+    pageLength = 10,
+    buttons = 'copy'
+    ),
+  class = 'cell-border stripe'
+)
 ```
 
 
+### Ajuste Modelo Blastulación Segunda Estimulación
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Aplicar stepAIC para seleccionar modelo con dirección hacia atrás
+modelo_seleccionado2 <- stepAIC(lr2, direction = "forward")
+
+# Utilizar broom para estructurar los resultados del modelo final
+modelo_tidy2 <- tidy(modelo_seleccionado2)
+```
 
 
 ```{r}
-variables_significativas_2estim <- resultados %>%
-  dplyr::filter(grepl("BLASTUL_2ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableY) &
+# Presentar la tabla de coeficientes del modelo seleccionado
+tidy_model_step2 <- broom::tidy(modelo_seleccionado2)
+datatable(
+  tidy_model_step2 %>%
+  mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
+  options = list(
+    pageLength = 10,
+    buttons = 'copy'
+    ),
+  class = 'cell-border stripe'
+)
+```
+
+
+# Código Usado {data-navmenu="Análisis Multivariante"}
+
+## Columna 1 {.tabset}
+-----------------------------------------------------------------------
+### Filtrado variables con significancia
+```{r echo=TRUE, eval = FALSE}
+# =======================================
+#             Filtrado DPLYR
+# =======================================
+
+variables_significativas <- resultados %>%
+  dplyr::filter((grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX) | 
+                 grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY)) &
                 Valor < 0.05) %>%
   dplyr::select(VariableX, VariableY, Valor, Test) %>%
   dplyr::arrange(VariableY) %>%
   distinct() # Elimina filas duplicadas
 ```
+.
 
+### Blastulación en Primera Estimulación
+```{r echo=TRUE, eval = FALSE}
 
+# =======================================
+#                 Modelo 
+#========================================
+lr <- glm((BLASTUL_1ESTIM=="SI")*1.0 ~ EDAD + AFC + FACTOR_FEM_1,
+                      family = binomial(link = "logit"), data = df_imputado)
 
+# Se utiliza broom para poder mostrar los resultados de una forma más agradable
+# Si se necesitan otras medidas (como varianza de los residuos) se añaden 
+# manualmente después de consultar summary(lr)
+tidy_model <- broom::tidy(lr)
 
+datatable(
+  tidy_model %>%
+  mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
+  options = list(
+    pageLength = 10,
+    buttons = 'copy'
+    ),
+  class = 'cell-border stripe'
+)
+# =======================================
+#             Ajuste: Stepwise 
+#========================================
+modelo_seleccionado1 <- stepAIC(lr1, direction = "backward")
 
+modelo_tidy <- tidy(modelo_seleccionado)
+```
+.
 
+### Blastulación en Primera Estimulación
+```{r echo=TRUE, eval = FALSE}
 
+# =======================================
+#                 Modelo 
+#========================================
+lr2 <- glm((BLASTUL_2ESTIM=="SI")*1.0 ~  GRUPO,
+                      family = binomial(link = "logit"), data = df_imputado)
 
+tidy_model2 <- broom::tidy(lr2)
 
+datatable(
+  tidy_model2 %>%
+  mutate_if(is.numeric, round, digits = 4),
+  extensions = 'Buttons',
+  options = list(
+    pageLength = 10,
+    buttons = 'copy'
+    ),
+  class = 'cell-border stripe'
+)
+# =======================================
+#             Ajuste: Stepwise 
+#========================================
+modelo_seleccionado2 <- stepAIC(lr2, direction = "forward")
 
-
-
+modelo_tidy2 <- tidy(modelo_seleccionado2)
+```
+.
 
