@@ -5,6 +5,6 @@ account: mario-pascual-rshiny-uma
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 11440723
-bundleId: 8359809
+bundleId: 8367220
 url: https://mario-pascual-rshiny-uma.shinyapps.io/entrega-fertilidad-mindat/
 version: 1

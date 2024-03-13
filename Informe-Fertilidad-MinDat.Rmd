@@ -19,6 +19,7 @@ library(readr)
 library(ggplot2)
 library(shiny)
 library(dplyr)
+library(broom)
 library(DT)
 library(tidyverse)
 library(reshape2)
@@ -320,11 +321,17 @@ datos <- datos %>%
                                 `BR` = "BR",
                                 `BR/EDAD` = "BR",
                                 `EDAD/BR` = "BR",
-                                `ADENO` = "ENDO/SI/ADENO",
-                                `ADENO/ENDO` = "ENDO/SI/ADENO",
-                                `Endo/ADENO` = "ENDO/SI/ADENO",
-                                `ENDO` = "ENDO/NO/ADENO",
-                                `UTERO D` = "ENDO/NO/ADENO"))
+                                `ADENO` = "ENDO",
+                                `ADENO/ENDO` = "ENDO",
+                                `Endo/ADENO` = "ENDO",
+                                `ENDO` = "ENDO",
+                                `UTERO D` = "ENDO",
+                                `FALLO IAC` = "ENDO",
+                                `FI` = "ENDO",
+                                `GENETICO` = "ENDO",
+                                `HIDROSALP` = "ENDO",
+                                `NO` = "ENDO",
+                                `AR` = "ENDO"))
 
 
 datos <- datos %>%
@@ -1752,29 +1759,44 @@ Filtrado usando dyplr.
 # Inferencia Blastulación {data-navmenu="Análisis Multivariante"}
 
 
-## Columna 1
+## Columna 1 {.tabset}
 -----------------------------------------------------------------------
 
 ### Objetivo
 
-Se pretende construir un modelo explicativo basado en la regresión logística con el objetivo de encontrar las variables comunes a los pacientes que expliquen mejor el evento "BLASTUL_1ESTIM" y "BLASTUL_2ESTIM" por separado. Con este fin, se va a proceder de la siguiente manera:
+Se pretende construir un modelo explicativo basado en la regresión logística con el objetivo de encontrar las variables comunes a los pacientes que expliquen mejor el evento `BLASTUL_1ESTIM` y `BLASTUL_2ESTIM` por separado. Con este fin, se va a proceder de la siguiente manera:
 
 1. Se filtrarán los resultados del análisis de asociación bruto para seleccionar las variables no específicas a ninguna estimulación que tengan un p-valor menor que 0.05 como resultado en los tests estadísticos realizados en conjunto con las variables `BLASTUL_1ESTIM` o `BLASTUL_2ESTIM`. 
-2. Partiendo de esta base
+2. Partiendo de estas variables, que guardan una significancia estadística con blastulación, se construirá el modelo explicativo de regresión logística. 
 
+Como se puede observar en la tabla superior, las variables que guardan una significacia estadística son:
+
+- `BLASTUL_1ESTIM`: `EDAD`, `AFC`, `FACTOR_FEM_1`, `Nº_OVO_1ESTIM`, `Nº_OVO_1ESTIM`, `MII_1ESTIM`, `MII_1ESTIM`, `FERTILIZ_1ESTIM`, `FERTILIZ_2ESTIM`, `FET_1ESTIM`, `FET_2ESTIM`, `BT_AA_1ESTIM`, `CONG_1ESTIM`.
+- `BLASTUL_2ESTIM`: `N_OVO_2ESTIM`, `MII_2ESTIM`, `FERTILIZ_2ESTIM`, `BT_AA_2ESTIM`, `CONG_2ESTIM`, `FET_2ESTIM`, `GRUPO`
+
+### Modelo Explicativo - Blastulación 1ESTIM
+
+Se intentará explicar el evento de la primera blastulación con las variables comunes a los pacientes. Por ello, de todas las variables con un p-valor compartido con  `BLASTUL_1ESTIM` menor que 0.05, solo nos quedaremos con: `EDAD`, `AFC` y `FACTOR_FEM_1`. 
+
+
+
+## Columna 2 {.tabset}
+-----------------------------------------------------------------------
+
+### Variables que guardan un p<0.05 con Blastulación 
 
 ```{r}
-variables_significativas <- resultados %>%
+#variables_significativas <- resultados %>%
   # Primero filtramos para que solo incluya las variables de interés cuando se relacionan con la blastulación
-  dplyr::filter(((VariableX %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
-                  (grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY))) |
-                 (VariableY %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
-                  (grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX)))) &
-                Valor < 0.05) %>%
-  dplyr::select(VariableX, VariableY, Valor, Test) %>%
-  dplyr::arrange(VariableY) %>%
+#  dplyr::filter(((VariableX %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI", "GRUPO") & 
+#                  (grepl("BLASTUL_1ESTIM", VariableY) | grepl("BLASTUL_2ESTIM", VariableY))) |
+#                 (VariableY %in% c("EDAD", "AFC", "FACTOR_MAS", "FACTOR_FEM_1", "BMI") & 
+#                  (grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX)))) &
+#                Valor < 0.05) %>%
+#  dplyr::select(VariableX, VariableY, Valor, Test) %>%
+#  dplyr::arrange(VariableY) %>%
   # Eliminamos filas duplicadas
-  distinct()
+#
 
 variables_significativas <- resultados %>%
   dplyr::filter((grepl("BLASTUL_1ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableX) | 
@@ -1782,31 +1804,58 @@ variables_significativas <- resultados %>%
                 Valor < 0.05) %>%
   dplyr::select(VariableX, VariableY, Valor, Test) %>%
   dplyr::arrange(VariableY) %>%
-  distinct() # Elimina filas duplicadas
+  distinct() # Elimina filas duplicadasdistinct()
 
-variables_significativas
-
+datatable(
+  variables_significativas, 
+  extensions = c('Buttons', 'FixedColumns', 'FixedHeader'),
+  options = list(
+    pageLength = 10, 
+    scrollX = TRUE, 
+    searching = TRUE, 
+    ordering = TRUE, 
+    paging = TRUE,
+    lengthMenu = list(c(5, 10, 25, 50, -1), c('5 rows', '10 rows', '25 rows', '50 rows', 'Show all')),
+    buttons = c('copy', 'csv', 'excel'),
+    dom = 'Bfrtip'
+  ),
+  class = 'cell-border stripe'
+)
 
 ```
 
+### Modelos
 ```{r}
-modelo_inicial <- glm(BLASTUL_1ESTIM ~ EDAD + AFC,
+lr <- glm(BLASTUL_1ESTIM ~ EDAD + AFC + FACTOR_FEM_1,
                       family = binomial(link = "logit"), data = df_imputado)
-
-summary(modelo_inicial)
+tidy_model <- broom::tidy(lr)
+datatable(
+  tidy_model %>%
+  mutate_if(is.numeric, round, digits = 4),
+  options = list(
+    pageLength = 10
+  ),
+  class = 'cell-border stripe'
+)
 ```
-```{r}
+```{r, eval=TRUE}
 # Aplicar selección stepwise para simplificar el modelo
-modelo_stepwise <- step(modelo_inicial, direction = "both")
+stepAIC(lr, directorion = "both")
 
-# Ver los resultados del modelo después de la selección stepwise
-summary(modelo_stepwise)
 
 ```
 
 
 
 
+```{r}
+variables_significativas_2estim <- resultados %>%
+  dplyr::filter(grepl("BLASTUL_2ESTIM", VariableX) | grepl("BLASTUL_2ESTIM", VariableY) &
+                Valor < 0.05) %>%
+  dplyr::select(VariableX, VariableY, Valor, Test) %>%
+  dplyr::arrange(VariableY) %>%
+  distinct() # Elimina filas duplicadas
+```
 
 
 
